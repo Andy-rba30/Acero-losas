@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>ARBA Losas</Name>
+    <Assembly>SlabRebar\SlabRebar.dll</Assembly>
+    <FullClassName>SlabRebar.RibbonApp</FullClassName>
+    <ClientId>c3e7a9d2-5b14-4f8e-9a6b-7d2e0f1c4a58</ClientId>
+    <VendorId>LOCAL</VendorId>
+    <VendorDescription>Uso interno</VendorDescription>
+  </AddIn>
+  <AddIn Type="Command">
+    <Name>Armar losa</Name>
+    <Text>Armar losa</Text>
+    <Description>Genera el armado de losas aligeradas (viguetas, bastones y acero de temperatura) y macizas (mallas inferior y superior) a partir de la geometria del elemento, con una ventana para elegir el armado y los aceros.</Description>
+    <Assembly>SlabRebar\SlabRebar.dll</Assembly>
+    <FullClassName>SlabRebar.ArmarLosaCommand</FullClassName>
+    <ClientId>e81f2b6c-4a9d-47c3-b5e0-6f3d8a2c9b17</ClientId>
+    <VendorId>LOCAL</VendorId>
+    <VendorDescription>Uso interno</VendorDescription>
+    <VisibilityMode>NotVisibleInFamily</VisibilityMode>
+  </AddIn>
+</RevitAddIns>
