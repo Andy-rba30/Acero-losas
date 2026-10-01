@@ -295,23 +295,30 @@ namespace SlabRebar
                         Add(MakeBar(BarLayer.JoistBottom, true, v, zb, db, s, Mm(a.Bottom.ExtensionMm), !string.IsNullOrEmpty(a.Bottom.HookTypeName)));
             }
 
-            // --- bastones / barra superior corrida de cada vigueta ---
-            double dt = 0;
+            // --- acero de temperatura (perpendicular, en la losa superior): es la capa mas alta, al
+            // recubrimiento superior o a la profundidad indicada; los bastones van justo debajo ---
+            double dte = 0, zte = 0;
+            if (a.Temperature.Enabled)
+            {
+                dte = d.Temperature;
+                zte = a.Temperature.DepthMm > 0 ? Thickness - Mm(a.Temperature.DepthMm) : Thickness - CoverTop - 0.5 * dte;
+            }
+
+            // --- bastones / barra superior corrida de cada vigueta (bajo la temperatura, si la hay) ---
             if (!a.Top.None)
             {
-                dt = d.JoistTop;
-                double zt = Thickness - CoverTop - 0.5 * dt;
+                double dt = d.JoistTop;
+                double top = a.Temperature.Enabled ? Math.Min(Thickness - CoverTop, zte - 0.5 * dte) : Thickness - CoverTop;
+                double zt = top - 0.5 * dt;
                 LayerZ[BarLayer.JoistTop] = zt;
                 foreach (Joist j in Joists)
                     foreach (Span s in Outline.Cut(true, j.Axis, CoverEdge + 0.5 * dt, _tol))
                         TopBars(BarLayer.JoistTop, true, j.Axis, zt, dt, s, a.Top);
             }
 
-            // --- acero de temperatura (perpendicular, en la losa superior) ---
             if (a.Temperature.Enabled)
             {
-                double dte = d.Temperature;
-                double z = a.Temperature.DepthMm > 0 ? Thickness - Mm(a.Temperature.DepthMm) : Thickness - CoverTop - dt - 0.5 * dte;
+                double z = zte;
                 LayerZ[BarLayer.Temperature] = z;
                 if (z - 0.5 * dte < Thickness - TopSlab - _tol)
                     Warnings.Add("el acero de temperatura queda por debajo de la losa superior (" + ToMm(Thickness - z) + " mm desde arriba, losa superior " + ToMm(TopSlab) + " mm)");

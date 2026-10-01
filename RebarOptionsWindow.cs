@@ -349,8 +349,8 @@ namespace SlabRebar
             AddRow(grid, r++, "Separacion (mm):", _teSp, "Separacion maxima entre barras de temperatura (250 es lo habitual); se reparten por igual sin superarla.");
             _teDepth = NumBox(t.DepthMm);
             AddRow(grid, r++, "Profundidad del eje (mm):", _teDepth,
-                   "Distancia de la cara superior al eje de la barra de temperatura. 0 = justo por debajo de los bastones (recubrimiento superior + diametro " +
-                   "del baston + medio diametro), para que se crucen sin chocar. Se avisa si queda por debajo de la losa superior.");
+                   "Distancia de la cara superior al eje de la barra de temperatura. 0 = al recubrimiento superior (recubrimiento + medio diametro). " +
+                   "Los bastones o la barra corrida van justo por debajo de ella. Se avisa si queda por debajo de la losa superior.");
             _teExt = NumBox(t.ExtensionMm);
             AddRow(grid, r++, "Prolongacion (mm):", _teExt, "Cuanto sobresale del borde exterior de la losa hacia la viga. 0 = para al recubrimiento lateral.");
             group.Content = grid;

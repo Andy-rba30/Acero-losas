@@ -92,10 +92,11 @@ hormigón, así la barra guarda el recubrimiento con los bordes paralelos a ella
   unen. En los extremos que dan a un hueco no hay bastón. También pueden ser una **barra
   corrida** o **ninguna**.
 - **Acero de temperatura**: barras a lo largo de `v` (perpendiculares a las viguetas) en
-  la losa superior, cada `spacingMm` (250) como máximo, repartidas por igual. Van **justo
-  por debajo de los bastones** (recubrimiento superior + diámetro del bastón + medio
-  diámetro) para cruzarse sin chocar, o a la profundidad `depthMm` que se indique. Se avisa
-  si quedan por debajo de la losa superior.
+  la losa superior, cada `spacingMm` (250) como máximo, repartidas por igual. Es la capa
+  **más alta**: al recubrimiento superior (recubrimiento + medio diámetro) o a la
+  profundidad `depthMm` que se indique; los bastones o la barra corrida van **justo por
+  debajo** de ella para cruzarse sin chocar. Se avisa si queda por debajo de la losa
+  superior.
 
 ### Losa maciza
 

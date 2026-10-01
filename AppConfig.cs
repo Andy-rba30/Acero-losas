@@ -66,8 +66,8 @@ namespace SlabRebar
     public class TemperatureCfg : LayerCfg
     {
         /// <summary>
-        /// Profundidad del eje de la barra desde la cara superior (mm). 0 = justo por debajo
-        /// de los bastones (recubrimiento superior + diametro del baston + medio diametro).
+        /// Profundidad del eje de la barra desde la cara superior (mm). 0 = al recubrimiento
+        /// superior (recubrimiento + medio diametro); los bastones van justo por debajo.
         /// </summary>
         public double DepthMm { get; set; } = 0;
     }

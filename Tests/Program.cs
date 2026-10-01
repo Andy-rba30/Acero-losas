@@ -134,12 +134,12 @@ namespace SlabRebar.Tests
             Check(p.GroupsOf(BarLayer.JoistTop) == 2, "bastones en 2 conjuntos (" + p.GroupsOf(BarLayer.JoistTop) + ")");
             PlannedBar t = p.Bars.Where(x => x.Layer == BarLayer.JoistTop).OrderBy(x => x.Start).First();
             Near(t.Start, 25, "baston extremo desde el recubrimiento"); Near(t.End, 800, "baston L/5 = 800");
-            Near(t.Z, 200 - 25 - 6.35, "cota del baston");
+            Near(t.Z, 200 - 25 - 6.4 - 6.35, "cota del baston, justo bajo la temperatura");
             Check(p.CountOf(BarLayer.Temperature) == 17, "17 barras de temperatura (" + p.CountOf(BarLayer.Temperature) + ")");
             PlannedBar te = p.Bars.First(x => x.Layer == BarLayer.Temperature);
             Check(!te.AlongU, "temperatura perpendicular a las viguetas");
             Near(te.Start, 25, "temperatura empieza al recubrimiento"); Near(te.End, 7975, "temperatura termina al recubrimiento");
-            Near(te.Z, 200 - 25 - 12.7 - 3.2, "temperatura bajo los bastones");
+            Near(te.Z, 200 - 25 - 3.2, "temperatura al recubrimiento superior, encima de los bastones");
             Check(p.Groups.Count == 4, "4 conjuntos en total (" + p.Groups.Count + ")");
             BarGroup g = p.Groups.First(x => x.Layer == BarLayer.JoistBottom);
             Near(g.Spacing, 400, "paso del conjunto inferior");
