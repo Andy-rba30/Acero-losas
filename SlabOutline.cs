@@ -154,7 +154,8 @@ namespace SlabRebar
             if (solids.Count == 0) { LastError = "el elemento no tiene geometria solida"; return null; }
             if (solids.Count > 1 && solids[1].Volume > 0.01 * solids[0].Volume)
             {
-                LastError = "el elemento tiene " + solids.Count + " solidos; se esperaba uno solo";
+                LastError = "el elemento tiene " + solids.Count + " solidos (tipo de suelo con varias capas?); se esperaba uno solo. " +
+                            "Usa un tipo con una sola capa estructural";
                 return null;
             }
             s.Solid = solids[0];

@@ -146,6 +146,20 @@ qué se ha rechazado lo que no.
 Sin tipo de barra elegido los esquemas se dibujan con diámetros orientativos y el botón
 Armar avisa de qué falta.
 
+## Limitaciones
+
+- Solo losas **horizontales de cara superior única**: las inclinadas, escalonadas o con
+  rebajes se rechazan.
+- Los apoyos son **vigas de eje recto** casi perpendiculares a `u`; los muros portantes y
+  las vigas oblicuas o curvas no se detectan (sin vigas, los apoyos son los extremos de
+  la losa). Si la losa está modelada **entre** las caras de las vigas, usa la prolongación
+  para anclar en ellas; si está modelada **sobre** las vigas, déjala en 0.
+- La aligerada es **en una dirección**; no se arman losas reticulares ni aligeradas en dos
+  direcciones. El sólido del suelo es un prisma (los ladrillos no están modelados), así que
+  la comprobación de hormigón no puede detectar una barra en la zona del ladrillo: es el
+  plan el que las mantiene en las viguetas y en la losa superior.
+- No se comprueban choques entre barras de capas distintas más allá del apilado de cotas.
+
 ## config.json
 
 ```jsonc

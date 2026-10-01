@@ -340,11 +340,17 @@ namespace SlabRebar
             return result;
         }
 
-        /// <summary>Longitud de la curva que queda fuera de todos los solidos; no verificable cuenta como fuera.</summary>
+        /// <summary>
+        /// Longitud de la curva que queda fuera del hormigon: se unen los tramos interiores de
+        /// todos los solidos (por sus parametros, para no contar dos veces un solapamiento
+        /// entre losa y viga) y se resta de la longitud total. No verificable cuenta como fuera.
+        /// </summary>
         private static bool CurveInside(List<Solid> solids, Curve cv, out double outsideLen)
         {
             outsideLen = cv.Length;
-            double inside = 0;
+            double p0 = cv.GetEndParameter(0), p1 = cv.GetEndParameter(1);
+            if (p1 - p0 < 1e-12) { outsideLen = 0; return true; }
+            var parts = new List<(double a, double b)>();
             bool any = false;
             foreach (Solid solid in solids)
             {
@@ -352,13 +358,18 @@ namespace SlabRebar
                 {
                     var opt = new SolidCurveIntersectionOptions { ResultType = SolidCurveIntersectionMode.CurveSegmentsInside };
                     SolidCurveIntersection ix = solid.IntersectWithCurve(cv, opt);
-                    if (ix != null)
-                        for (int i = 0; i < ix.SegmentCount; i++) inside += ix.GetCurveSegment(i).Length;
                     any = true;
+                    if (ix == null) continue;
+                    for (int i = 0; i < ix.SegmentCount; i++)
+                    {
+                        CurveExtents ex = ix.GetCurveSegmentExtents(i);
+                        parts.Add((Math.Min(ex.StartParameter, ex.EndParameter), Math.Max(ex.StartParameter, ex.EndParameter)));
+                    }
                 }
                 catch { }
             }
             if (!any) return false;
+            double inside = Geometry2D.Merge(parts, 0).Sum(p => p.b - p.a) / (p1 - p0) * cv.Length;
             outsideLen = Math.Max(0, cv.Length - inside);
             return outsideLen <= InsideTol;
         }

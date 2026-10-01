@@ -84,7 +84,25 @@ hormigon.
 - [x] Comando e informe.
 - [x] README.
 - [x] Compilacion (dotnet build con EnableWindowsTargeting): 0 errores, 0 avisos.
-- [ ] Revision final del codigo (casos limite, textos) y prueba en Revit por parte del usuario.
+- [x] Revision del codigo: union de tramos interiores por parametro al comprobar contra losa + vigas,
+      vigas detectadas siempre y usadas segun la casilla, limitaciones documentadas.
+- [ ] Prueba en Revit 2027.2 por parte del usuario (no hay Revit en el entorno de la sesion).
+
+## Como retomar
+
+1. `git pull` de la rama `claude/brave-allen-3gowqo`.
+2. `dotnet build -c Debug` en Windows con Revit 2027 instalado: copia la DLL, `config.json` y el
+   `.addin` a `%AppData%\Autodesk\Revit\Addins\2027\`.
+3. En Revit: pestana ARBA > Acero > Losas. Seleccionar suelos estructurales de hormigon.
+4. Si algo falla en Revit, el informe final y los avisos de la ventana dicen el motivo; las
+   clases puras se depuran con `cd Tests && dotnet run`.
+
+## Ideas pendientes (no implementadas)
+
+- Muros portantes como apoyos de los bastones.
+- Losas aligeradas en dos direcciones / reticulares.
+- Ganchos distintos por extremo y longitudes de anclaje calculadas por diametro.
+- Numeracion de particion por pano y etiquetas automaticas en planta.
 
 ## Entorno de compilacion usado en la sesion
 

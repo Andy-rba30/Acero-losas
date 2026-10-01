@@ -196,7 +196,7 @@ namespace SlabRebar
                     side.Children.Add(new TextBlock { Text = "Direccion:", Margin = new Thickness(10, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center });
                     var dir = new ComboBox
                     {
-                        Width = 130, ToolTip = "Direccion de las viguetas (aligerada) o de las barras principales (maciza) de este elemento. General = la elegida abajo."
+                        Width = 160, ToolTip = "Direccion de las viguetas (aligerada) o de las barras principales (maciza) de este elemento. General = la elegida abajo."
                     };
                     dir.Items.Add("(general)");
                     for (int i = 0; i < 4; i++) dir.Items.Add(DirLabels[i]);
