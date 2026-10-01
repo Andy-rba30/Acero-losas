@@ -32,15 +32,15 @@ hormigon.
 | `AppConfig.cs` | Configuracion (`config.json`): recubrimientos, direccion, aligerada, maciza, temperatura, particion | hecho |
 | `PartitionName.cs` | Plantilla del parametro Particion (`{marca}`, `{id}`, `{tipo}`, `{familia}`, `{conjunto}`, `{capa}`) | hecho |
 | `Geometry2D.cs` | Geometria pura: `Pt`, poligonos con huecos, recorte de una recta contra el contorno (scan-line), eje del borde mas largo, caja envolvente | hecho |
-| `SlabOutline.cs` | Lectura del solido de Revit: cara superior plana, contorno exterior y huecos, espesor, ejes locales, vigas de apoyo | pendiente |
+| `SlabOutline.cs` | Lectura del solido de Revit: cara superior plana, contorno exterior y huecos, espesor, ejes locales, vigas de apoyo | hecho |
 | `SlabPlan.cs` | Armado puro: viguetas, barras por capa y direccion, bastones por apoyos, temperatura, agrupacion en arrays | hecho |
-| `HostAnalysis.cs` | Resultado por losa (contorno o motivo de rechazo) + elecciones por losa (tipo, direccion) | pendiente |
-| `RebarGenerator.cs` | Crea los `Rebar` con las dos redes de seguridad | pendiente |
-| `RebarOptionsWindow.cs` | Ventana WPF en codigo, mismo aspecto que columnas | pendiente |
-| `PlanPreview.cs` | Esquema en planta (zoom/arrastrar/doble clic) | pendiente |
-| `SectionPreview.cs` | Esquema de la seccion transversal (ladrillos, viguetas, barras, temperatura) | pendiente |
-| `ArmarLosaCommand.cs` | Comando externo: seleccion de losas, analisis, ventana, transaccion, informe | pendiente |
-| `README.md` | Documentacion de uso al estilo del add-in de columnas | pendiente |
+| `HostAnalysis.cs` | Resultado por losa (contorno o motivo de rechazo) + elecciones por losa (tipo, direccion) | hecho |
+| `RebarGenerator.cs` | Crea los `Rebar` con las dos redes de seguridad | hecho |
+| `RebarOptionsWindow.cs` | Ventana WPF en codigo, mismo aspecto que columnas | hecho |
+| `PlanPreview.cs` | Esquema en planta (zoom/arrastrar/doble clic) | hecho |
+| `SectionPreview.cs` | Esquema de la seccion transversal (ladrillos, viguetas, barras, temperatura) | hecho |
+| `ArmarLosaCommand.cs` | Comando externo: seleccion de losas, analisis, ventana, transaccion, informe | hecho |
+| `README.md` | Documentacion de uso al estilo del add-in de columnas | hecho |
 | `Tests/` | Programa de consola que prueba las clases puras (`Geometry2D`, `SlabPlan`): `cd Tests && dotnet run` | hecho (115 comprobaciones) |
 
 ## Decisiones de diseño
@@ -78,12 +78,13 @@ hormigon.
 - [x] Plan guardado.
 - [x] Proyecto, manifiesto, config, tema, cinta.
 - [x] Geometria pura y plan de armado + pruebas de consola (115 OK).
-- [ ] Lectura del solido de Revit y apoyos.
-- [ ] Generador con redes de seguridad.
-- [ ] Ventana y esquemas.
-- [ ] Comando e informe.
-- [ ] README.
-- [ ] Compilacion (dotnet build con EnableWindowsTargeting) y pruebas.
+- [x] Lectura del solido de Revit y apoyos.
+- [x] Generador con redes de seguridad.
+- [x] Ventana y esquemas.
+- [x] Comando e informe.
+- [x] README.
+- [x] Compilacion (dotnet build con EnableWindowsTargeting): 0 errores, 0 avisos.
+- [ ] Revision final del codigo (casos limite, textos) y prueba en Revit por parte del usuario.
 
 ## Entorno de compilacion usado en la sesion
 
