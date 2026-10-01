@@ -29,55 +29,80 @@ namespace SlabRebar
     }
 
     /// <summary>
-    /// Contorno de la losa en coordenadas locales: anillo exterior (antihorario) y huecos.
+    /// Contorno de la losa en coordenadas locales: uno o varios anillos exteriores (panos,
+    /// antihorarios) y sus huecos. Un mismo suelo de Revit puede tener varios panos separados
+    /// por vigas: se clasifican por anidamiento (profundidad par = exterior, impar = hueco).
     /// Sabe recortar una recta (u = cte o v = cte) contra el contorno devolviendo los tramos
     /// interiores, que son las barras. Geometria pura, sin Revit.
     /// </summary>
     public sealed class Outline2D
     {
-        public List<Pt> Outer;
+        /// <summary>Anillos exteriores (panos), el mayor primero.</summary>
+        public List<List<Pt>> Outers;
         public List<List<Pt>> Holes;
+        /// <summary>El pano mayor.</summary>
+        public List<Pt> Outer => Outers[0];
         public double UMin, UMax, VMin, VMax;
         public double Width => UMax - UMin;
         public double Depth => VMax - VMin;
 
         private Outline2D _transposed;
 
+        /// <summary>Contorno de un solo pano con sus huecos.</summary>
         public Outline2D(List<Pt> outer, IEnumerable<List<Pt>> holes, double tol)
+            : this(new[] { outer }.Concat(holes ?? new List<List<Pt>>()), tol) { }
+
+        /// <summary>Contorno a partir de todos los anillos, sin orden: se clasifican en panos y huecos.</summary>
+        public Outline2D(IEnumerable<List<Pt>> rings, double tol)
         {
-            Outer = Geometry2D.Simplify(outer, tol);
-            if (Geometry2D.SignedArea(Outer) < 0) Outer.Reverse();
+            var clean = new List<List<Pt>>();
+            foreach (List<Pt> r in rings)
+            {
+                if (r == null) continue;
+                List<Pt> s = Geometry2D.Simplify(r, tol);
+                if (s.Count >= 3 && Math.Abs(Geometry2D.SignedArea(s)) > tol * tol) clean.Add(s);
+            }
+            if (clean.Count == 0) throw new ArgumentException("contorno vacio");
+            Outers = new List<List<Pt>>();
             Holes = new List<List<Pt>>();
-            if (holes != null)
-                foreach (List<Pt> h in holes)
-                {
-                    List<Pt> s = Geometry2D.Simplify(h, tol);
-                    if (s.Count >= 3 && Math.Abs(Geometry2D.SignedArea(s)) > tol * tol) Holes.Add(s);
-                }
-            UMin = Outer.Min(p => p.U); UMax = Outer.Max(p => p.U);
-            VMin = Outer.Min(p => p.V); VMax = Outer.Max(p => p.V);
+            foreach (List<Pt> r in clean)
+            {
+                int depth = clean.Count(o => !ReferenceEquals(o, r) && Geometry2D.PointInRing(o, Geometry2D.InnerPoint(r)));
+                if (depth % 2 == 0) { if (Geometry2D.SignedArea(r) < 0) r.Reverse(); Outers.Add(r); }
+                else Holes.Add(r);
+            }
+            Outers = Outers.OrderByDescending(r => Math.Abs(Geometry2D.SignedArea(r))).ToList();
+            IEnumerable<Pt> all = Outers.SelectMany(r => r);
+            UMin = all.Min(p => p.U); UMax = all.Max(p => p.U);
+            VMin = all.Min(p => p.V); VMax = all.Max(p => p.V);
         }
 
-        /// <summary>Area neta (exterior menos huecos).</summary>
-        public double Area => Math.Abs(Geometry2D.SignedArea(Outer)) - Holes.Sum(h => Math.Abs(Geometry2D.SignedArea(h)));
+        /// <summary>Area neta (panos menos huecos).</summary>
+        public double Area => Outers.Sum(r => Math.Abs(Geometry2D.SignedArea(r))) - Holes.Sum(h => Math.Abs(Geometry2D.SignedArea(h)));
 
+        /// <summary>Todos los anillos: primero los panos, luego los huecos.</summary>
         public IEnumerable<List<Pt>> Rings()
         {
-            yield return Outer;
+            foreach (List<Pt> o in Outers) yield return o;
             foreach (List<Pt> h in Holes) yield return h;
+        }
+
+        /// <summary>Anillos con su marca de hueco.</summary>
+        public IEnumerable<(List<Pt> ring, bool hole)> RingsFlagged()
+        {
+            foreach (List<Pt> o in Outers) yield return (o, false);
+            foreach (List<Pt> h in Holes) yield return (h, true);
         }
 
         /// <summary>Copia desplazada (du, dv).</summary>
         public Outline2D Translated(double du, double dv, double tol) =>
-            new Outline2D(Outer.Select(p => new Pt(p.U + du, p.V + dv)).ToList(),
-                          Holes.Select(h => h.Select(p => new Pt(p.U + du, p.V + dv)).ToList()), tol);
+            new Outline2D(Rings().Select(r => r.Select(p => new Pt(p.U + du, p.V + dv)).ToList()), tol);
 
         /// <summary>El mismo contorno con u y v intercambiados (para cortar con rectas u = cte).</summary>
         public Outline2D Transposed(double tol)
         {
             if (_transposed == null)
-                _transposed = new Outline2D(Outer.Select(p => new Pt(p.V, p.U)).ToList(),
-                                            Holes.Select(h => h.Select(p => new Pt(p.V, p.U)).ToList()), tol);
+                _transposed = new Outline2D(Rings().Select(r => r.Select(p => new Pt(p.V, p.U)).ToList()), tol);
             return _transposed;
         }
 
@@ -206,6 +231,36 @@ namespace SlabRebar
             return dir;
         }
 
+        /// <summary>
+        /// Un punto estrictamente interior al anillo: el punto medio de su primera arista
+        /// desplazado un poco hacia dentro (hacia la izquierda si el anillo es antihorario).
+        /// </summary>
+        public static Pt InnerPoint(IList<Pt> ring)
+        {
+            Pt a = ring[0], b = ring[1 % ring.Count];
+            double du = b.U - a.U, dv = b.V - a.V, len = Math.Sqrt(du * du + dv * dv);
+            if (len < 1e-12) return a;
+            double sign = SignedArea(ring) >= 0 ? 1 : -1;
+            double eps = 1e-4 * Math.Max(len, 1e-3);
+            Pt m = new Pt(0.5 * (a.U + b.U), 0.5 * (a.V + b.V));
+            Pt p = new Pt(m.U - sign * dv / len * eps, m.V + sign * du / len * eps);
+            return PointInRing(ring, p) ? p : new Pt(m.U + sign * dv / len * eps, m.V - sign * du / len * eps);
+        }
+
+        /// <summary>Direccion del borde mas largo de entre varios anillos.</summary>
+        public static Pt LongestEdgeDirection(IEnumerable<List<Pt>> rings)
+        {
+            double best = -1; Pt dir = new Pt(1, 0);
+            foreach (List<Pt> ring in rings)
+                for (int i = 0; i < ring.Count; i++)
+                {
+                    Pt a = ring[i], b = ring[(i + 1) % ring.Count];
+                    double len = a.DistanceTo(b);
+                    if (len > best) { best = len; dir = LongestEdgeDirection(new List<Pt> { a, b }); }
+                }
+            return dir;
+        }
+
         /// <summary>Punto dentro de un anillo simple (regla par-impar, sin tolerancia).</summary>
         public static bool PointInRing(IList<Pt> ring, Pt p)
         {
@@ -229,8 +284,7 @@ namespace SlabRebar
         public static List<Span> RawCut(Outline2D o, double coord)
         {
             var xs = new List<(double u, bool hole)>();
-            bool holeRing = false;
-            foreach (List<Pt> ring in o.Rings())
+            foreach ((List<Pt> ring, bool holeRing) in o.RingsFlagged())
             {
                 for (int i = 0; i < ring.Count; i++)
                 {
@@ -242,7 +296,6 @@ namespace SlabRebar
                         xs.Add((a.U + t * (b.U - a.U), holeRing));
                     }
                 }
-                holeRing = true;
             }
             xs.Sort((p, q) => p.u.CompareTo(q.u));
             var spans = new List<Span>();

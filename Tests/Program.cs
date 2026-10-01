@@ -43,6 +43,8 @@ namespace SlabRebar.Tests
             AligeradaBeam();
             Console.WriteLine("== Aligerada con hueco ==");
             AligeradaHole();
+            Console.WriteLine("== Varios panos en un mismo suelo ==");
+            Panels();
             Console.WriteLine("== Losa en L ==");
             LShape();
             Console.WriteLine("== Maciza 4 x 8 m ==");
@@ -243,6 +245,30 @@ namespace SlabRebar.Tests
             Check(p.GroupsOf(BarLayer.JoistBottom) >= 3, "varios conjuntos inferiores (" + p.GroupsOf(BarLayer.JoistBottom) + ")");
             int temp = p.CountOf(BarLayer.Temperature);
             Check(temp > 17, "temperatura partida por el hueco (" + temp + " barras)");
+        }
+
+        private static void Panels()
+        {
+            AppConfig c = Cfg();
+            // dos panos de 2.5 x 4 m separados por una viga de 300 (en v), mas un hueco en el segundo
+            var rings = new List<List<Pt>> { Box(0, 0, 2500, 4000), Box(0, 4300, 2500, 8300), Box(1000, 5000, 1500, 5500) };
+            var o = new Outline2D(rings, Mm(2));
+            Check(o.Outers.Count == 2 && o.Holes.Count == 1, "2 panos y 1 hueco (" + o.Outers.Count + ", " + o.Holes.Count + ")");
+            Near(o.Depth, 8300, "fondo total");
+            List<Span> sp = o.Cut(false, Mm(500), Mm(30), Mm(2));
+            Check(sp.Count == 2 && !sp[0].HoleB && !sp[1].HoleA, "una recta a lo largo de v cruza los dos panos con extremos exteriores (" + sp.Count + ")");
+            if (sp.Count == 2) { Near(sp[0].B, 4000, "fin del pano 1"); Near(sp[1].A, 4300, "inicio del pano 2"); }
+            SlabPlan p = SlabPlan.Build(o, new List<Support>(), Mm(200), SlabKind.Aligerada, c, Diam());
+            Console.WriteLine("  " + p.Describe() + " | " + p.DescribeLayers());
+            Check(p.Error == null, "sin error: " + p.Error);
+            // viguetas (a lo largo de u = 2.5 m) en los dos panos; la zona de la viga (4000..4300) no lleva vigueta
+            Check(p.Joists.Count >= 19 && p.Joists.Count <= 21, "viguetas repartidas en 8.3 m (" + p.Joists.Count + ")");
+            int inGap = p.Bars.Count(b => b.Layer == BarLayer.JoistBottom && b.Coord > Mm(4000) && b.Coord < Mm(4300));
+            Check(inGap == 0, "ninguna barra inferior en la franja de la viga (" + inGap + ")");
+            PlannedBar te = p.Bars.Where(b => b.Layer == BarLayer.Temperature).OrderBy(b => b.Start).First();
+            Near(te.End, 3975, "temperatura del pano 1 para al recubrimiento del borde del pano");
+            Check(p.Bars.Where(b => b.Layer == BarLayer.Temperature).Any(b => Math.Abs(b.Start - Mm(4325)) < 1e-6), "temperatura del pano 2 empieza al recubrimiento");
+            Check(p.Bars.All(b => o.Contains(new Pt(b.AlongU ? 0.5 * (b.InA + b.InB) : b.Coord, b.AlongU ? b.Coord : 0.5 * (b.InA + b.InB)))), "todas las barras dentro de algun pano");
         }
 
         private static void LShape()

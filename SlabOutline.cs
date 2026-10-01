@@ -89,7 +89,8 @@ namespace SlabRebar
         public string Describe()
         {
             string d = "u " + (Width * 0.3048).ToString("0.00", CultureInfo.InvariantCulture) + " x v " +
-                       (Depth * 0.3048).ToString("0.00", CultureInfo.InvariantCulture) + " m, direccion " + DirectionName +
+                       (Depth * 0.3048).ToString("0.00", CultureInfo.InvariantCulture) + " m" +
+                       (Outline.Outers.Count > 1 ? " (" + Outline.Outers.Count + " panos)" : "") + ", direccion " + DirectionName +
                        ", " + Supports.Count + (Supports.Count == 1 ? " apoyo" : " apoyos");
             return d;
         }
@@ -124,6 +125,8 @@ namespace SlabRebar
         public double Thickness => ZTop - ZBottom;
         /// <summary>Anillos del contorno en coordenadas del modelo (x, y): el primero es el exterior, el resto huecos.</summary>
         public List<List<Pt>> WorldRings = new List<List<Pt>>();
+        /// <summary>Numero de panos (anillos exteriores) y de huecos.</summary>
+        public int Panels = 1, HoleCount;
         public List<BeamInfo> Beams = new List<BeamInfo>();
         public string Note = "";
         public double TypeThickness;
@@ -133,11 +136,12 @@ namespace SlabRebar
         private readonly Dictionary<string, SlabFrame> _frames = new Dictionary<string, SlabFrame>();
         private double _tol;
 
-        public int Holes => Math.Max(0, WorldRings.Count - 1);
+        public int Holes => HoleCount;
 
         public string Describe()
         {
-            return "espesor " + ToMm(Thickness) + " mm" + (Holes > 0 ? ", " + Holes + (Holes == 1 ? " hueco" : " huecos") : "") +
+            return "espesor " + ToMm(Thickness) + " mm" + (Panels > 1 ? ", " + Panels + " panos" : "") +
+                   (Holes > 0 ? ", " + Holes + (Holes == 1 ? " hueco" : " huecos") : "") +
                    (Beams.Count > 0 ? ", " + Beams.Count + (Beams.Count == 1 ? " viga cerca" : " vigas cerca") : "") + Note;
         }
 
@@ -172,15 +176,11 @@ namespace SlabRebar
             if (ups.Count == 0) { LastError = "la losa no tiene ninguna cara superior horizontal (losa inclinada o con pendiente); solo se arman losas horizontales"; return null; }
             if (downs.Count == 0) { LastError = "la losa no tiene cara inferior horizontal"; return null; }
             s.ZTop = ups.Max(f => f.Origin.Z);
+            // puede haber varias caras a la misma cota: un suelo con varios panos separados por vigas
             List<PlanarFace> topFaces = ups.Where(f => Math.Abs(f.Origin.Z - s.ZTop) <= tol).ToList();
-            if (topFaces.Count > 1)
-            {
-                LastError = "la cara superior esta partida en " + topFaces.Count + " trozos (losa dividida); se esperaba una sola cara";
-                return null;
-            }
-            PlanarFace top = topFaces[0];
-            double lowerArea = ups.Where(f => f != top).Sum(f => f.Area);
-            if (lowerArea > 0.02 * top.Area)
+            double topArea = topFaces.Sum(f => f.Area);
+            double lowerArea = ups.Where(f => !topFaces.Contains(f)).Sum(f => f.Area);
+            if (lowerArea > 0.02 * topArea)
             {
                 LastError = "la losa tiene caras superiores a distintas cotas (escalonada o con rebaje); solo se arman losas de cara superior unica";
                 return null;
@@ -200,9 +200,9 @@ namespace SlabRebar
             if (downs.Count > 1 && downs.Any(f => Math.Abs(f.Origin.Z - s.ZBottom) > tol))
                 s.Note += " (cara inferior partida: hay otros elementos que le quitan hormigon por debajo)";
 
-            // --- contorno: anillos de la cara superior ---
-            IList<CurveLoop> loops;
-            try { loops = top.GetEdgesAsCurveLoops(); }
+            // --- contorno: anillos de todas las caras superiores ---
+            var loops = new List<CurveLoop>();
+            try { foreach (PlanarFace tf in topFaces) loops.AddRange(tf.GetEdgesAsCurveLoops()); }
             catch (Exception ex) { LastError = "no se pudo leer el contorno de la cara superior (" + ex.Message + ")"; return null; }
             var rings = new List<List<Pt>>();
             foreach (CurveLoop loop in loops)
@@ -223,18 +223,13 @@ namespace SlabRebar
                 if (pts.Count >= 3 && Math.Abs(Geometry2D.SignedArea(pts)) > tol * tol) rings.Add(pts);
             }
             if (rings.Count == 0) { LastError = "el contorno de la cara superior esta vacio"; return null; }
-            rings = rings.OrderByDescending(r => Math.Abs(Geometry2D.SignedArea(r))).ToList();
-            if (rings.Count > 1)
-            {
-                // todos los demas anillos tienen que estar dentro del exterior (huecos)
-                foreach (List<Pt> h in rings.Skip(1))
-                    if (!Geometry2D.PointInRing(rings[0], Geometry2D.Centroid(h)))
-                    {
-                        LastError = "la cara superior tiene varios contornos exteriores (losa partida)";
-                        return null;
-                    }
-            }
-            s.WorldRings = rings;
+            // panos y huecos por anidamiento (un suelo puede tener varios panos separados por vigas)
+            Outline2D world;
+            try { world = new Outline2D(rings, tol); }
+            catch (Exception ex) { LastError = "no se pudo clasificar el contorno (" + ex.Message + ")"; return null; }
+            s.WorldRings = world.Rings().ToList();
+            s.Panels = world.Outers.Count;
+            s.HoleCount = world.Holes.Count;
 
             // --- vigas de apoyo (se buscan siempre; la configuracion decide si se usan) ---
             try { s.FindBeams(doc); }
@@ -312,10 +307,10 @@ namespace SlabRebar
             string key = (mode == "angle" ? mode + ":" + Math.Round(angleDeg, 3).ToString(CultureInfo.InvariantCulture) : mode) + (withBeams ? "+vigas" : "");
             if (_frames.TryGetValue(key, out SlabFrame cached)) return cached;
 
-            List<Pt> outer = WorldRings[0];
-            Pt e = Geometry2D.LongestEdgeDirection(outer);
+            List<Pt> outerPts = WorldRings.Take(Math.Max(1, Panels)).SelectMany(r => r).ToList();
+            Pt e = Geometry2D.LongestEdgeDirection(WorldRings.Take(Math.Max(1, Panels)));
             Pt perp = new Pt(-e.V, e.U);
-            double le = Extent(outer, e), lp = Extent(outer, perp);
+            double le = Extent(outerPts, e), lp = Extent(outerPts, perp);
             Pt dir;
             switch (mode)
             {
@@ -334,10 +329,10 @@ namespace SlabRebar
 
             // contorno en coordenadas locales, con el minimo en (0, 0)
             List<List<Pt>> local = WorldRings.Select(r => r.Select(p => ToLocal(p, f)).ToList()).ToList();
-            double umin = local[0].Min(p => p.U), vmin = local[0].Min(p => p.V);
+            double umin = local.SelectMany(r => r).Min(p => p.U), vmin = local.SelectMany(r => r).Min(p => p.V);
             local = local.Select(r => r.Select(p => new Pt(p.U - umin, p.V - vmin)).ToList()).ToList();
             f.Origin = new XYZ(f.DirU.X * umin + f.DirV.X * vmin, f.DirU.Y * umin + f.DirV.Y * vmin, ZBottom);
-            f.Outline = new Outline2D(local[0], local.Skip(1), _tol);
+            f.Outline = new Outline2D(local, _tol);
 
             // vigas casi perpendiculares a u = apoyos (franja [U1, U2] a lo largo de v)
             double cosTol = Math.Cos(3 * Math.PI / 180);

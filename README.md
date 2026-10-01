@@ -28,7 +28,9 @@ tipos de barra, separaciones, bastones, temperatura y recubrimientos, con un esq
 1. Toma el sólido del suelo (`Floor`). Tiene que tener **una única cara superior plana y
    horizontal**: losas inclinadas, escalonadas, con rebajes o partidas se rechazan con un
    mensaje claro y sin crear ninguna barra.
-2. De esa cara salen el **contorno exterior y los huecos** (los bordes curvos se teselan).
+2. De esa cara salen los **contornos exteriores y los huecos** (los bordes curvos se teselan).
+   Un mismo suelo puede tener **varios paños** separados por vigas (varios contornos cerrados
+   en el boceto): cada paño se arma por separado y sus bordes cuentan como bordes exteriores.
    El espesor es la distancia a la cara inferior; si no coincide con el del tipo (losa
    cortada o unida a otros elementos) se avisa y se usa el sólido.
 3. Busca las **vigas** (armazón estructural de eje recto) a la cota de la losa, tanto las
@@ -148,8 +150,8 @@ Armar avisa de qué falta.
 
 ## Limitaciones
 
-- Solo losas **horizontales de cara superior única**: las inclinadas, escalonadas o con
-  rebajes se rechazan.
+- Solo losas **horizontales y de espesor único**: las inclinadas, escalonadas o con rebajes se
+  rechazan.
 - Los apoyos son **vigas de eje recto** casi perpendiculares a `u`; los muros portantes y
   las vigas oblicuas o curvas no se detectan (sin vigas, los apoyos son los extremos de
   la losa). Si la losa está modelada **entre** las caras de las vigas, usa la prolongación
