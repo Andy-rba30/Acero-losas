@@ -193,18 +193,25 @@ namespace SlabRebar
 
             if (_plan.Error != null) { Text(_plan.Error, 10, 24, Brushes.Firebrick, 12); return; }
 
-            // acero perpendicular (a lo largo de v): la barra mas cercana al corte de cada capa, como una raya a su cota
+            // acero perpendicular (a lo largo de v): la recta mas cercana al corte de cada capa, como una raya
+            // a su cota. Con varios panos (o huecos) esa recta esta partida en un tramo por pano: se dibujan todos.
             foreach (var layer in _plan.Bars.Where(b => !b.AlongU).GroupBy(b => b.Layer))
             {
-                PlannedBar b = layer.OrderBy(x => Math.Abs(x.Coord - uCut)).First();
+                double coord = layer.OrderBy(x => Math.Abs(x.Coord - uCut)).First().Coord;
+                List<PlannedBar> line = layer.Where(x => Math.Abs(x.Coord - coord) < 1e-9).OrderBy(x => x.Start).ToList();
+                PlannedBar b = line[0];
                 Brush brush = PlanColors.Of(b.Layer);
                 double th = Math.Max(1.2, b.D * k);
-                var ln = new Line
+                foreach (PlannedBar seg in line)
                 {
-                    X1 = X(b.Start), Y1 = Y(b.Z), X2 = X(b.End), Y2 = Y(b.Z), Stroke = brush, StrokeThickness = th,
-                    ToolTip = Layers.Name(b.Layer) + " Ø" + (b.D * FtToMm).ToString("0.#", CultureInfo.InvariantCulture) + " mm a " + Mm(b.Z) + " mm desde abajo (la mas cercana al corte, u=" + Mm(b.Coord) + ")"
-                };
-                Children.Add(ln);
+                    var ln = new Line
+                    {
+                        X1 = X(seg.Start), Y1 = Y(seg.Z), X2 = X(seg.End), Y2 = Y(seg.Z), Stroke = brush, StrokeThickness = th,
+                        ToolTip = Layers.Name(seg.Layer) + " Ø" + (seg.D * FtToMm).ToString("0.#", CultureInfo.InvariantCulture) + " mm a " + Mm(seg.Z) +
+                                  " mm desde abajo (la mas cercana al corte, u=" + Mm(seg.Coord) + "; de v=" + Mm(seg.Start) + " a " + Mm(seg.End) + ")"
+                    };
+                    Children.Add(ln);
+                }
                 Text(Layers.Name(b.Layer) + " Ø" + (b.D * FtToMm).ToString("0.#", CultureInfo.InvariantCulture), X(o.VMin) + 4, Y(b.Z) - 14, brush, 9);
             }
 

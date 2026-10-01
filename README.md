@@ -134,7 +134,9 @@ qué se ha rechazado lo que no.
   huecos, vigas cercanas y el resumen del armado (o, en rojo, el motivo del rechazo). Cada
   fila armable tiene su **tipo** (general / aligerada / maciza) y su **dirección** propios.
   Clic en una fila para verla en los esquemas.
-- **Tipo de losa y dirección**: tipo por defecto, dirección general y ángulo.
+- **Tipo de losa y dirección**: tipo por defecto, dirección general y ángulo. Solo se
+  muestran las entradas del tipo de losa que se va a armar (aligerada y temperatura, o
+  maciza), según el tipo general, el propio de cada losa o el deducido por el nombre.
 - **Losa aligerada**: ancho y separación de viguetas, losa superior, primera vigueta;
   barra inferior (tipo, 1 o 2, prolongación, gancho); barras superiores (bastones /
   corrida / ninguna, tipo, L/4 y L/5 o longitud fija, prolongación, gancho).
@@ -151,7 +153,8 @@ qué se ha rechazado lo que no.
   encajar. Al pasar el ratón por una barra se ve su capa, diámetro, posición y longitud.
 - **Sección transversal** a media luz: espesor, ladrillos y viguetas con la losa superior,
   cada barra que cruza el corte como un círculo (las que no cruzan, como los bastones de
-  apoyo, en hueco) y el acero perpendicular como una raya a su cota. Como la losa es muy
+  apoyo, en hueco) y el acero perpendicular como una raya a su cota (con varios paños, un
+  tramo por paño). Como la losa es muy
   ancha respecto a su espesor, al encajar se ven unas tres viguetas centradas: se puede
   ampliar, reducir y desplazar.
 - **Guardar como valores por defecto** escribe `config.json`; **Armar** crea las barras;

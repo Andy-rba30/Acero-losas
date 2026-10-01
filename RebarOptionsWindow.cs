@@ -33,6 +33,8 @@ namespace SlabRebar
         /// <summary>Configuracion final si el usuario pulso "Armar"; null si cancelo.</summary>
         public AppConfig Result { get; private set; }
 
+        // grupos de entradas de cada tipo de losa: solo se muestran los del tipo que se va a armar
+        private UIElement _aligGroup, _tempGroup, _macBottomGroup, _macTopGroup;
         // tipo de losa y direccion
         private ComboBox _kind, _dir;
         private TextBox _angle;
@@ -126,10 +128,10 @@ namespace SlabRebar
 
             var left = new StackPanel();
             left.Children.Add(BuildKindAndDirection());
-            left.Children.Add(BuildAligerada());
-            left.Children.Add(BuildTemperature());
-            left.Children.Add(BuildMacizaBottom());
-            left.Children.Add(BuildMacizaTop());
+            left.Children.Add(_aligGroup = BuildAligerada());
+            left.Children.Add(_tempGroup = BuildTemperature());
+            left.Children.Add(_macBottomGroup = BuildMacizaBottom());
+            left.Children.Add(_macTopGroup = BuildMacizaTop());
             left.Children.Add(BuildGeneral());
             var scroll = new ScrollViewer
             {
@@ -763,6 +765,19 @@ namespace SlabRebar
             if (_building) return;
             AppConfig scratch = ReadConfig(out string error);
             MarkTypes(scratch);
+
+            // solo se muestran las entradas del tipo de losa que se va a armar (el general, el propio
+            // de cada losa o el deducido por el nombre); sin losa armable, las del tipo por defecto
+            var kinds = new HashSet<SlabKind>(_items.Where(i => i.CanBuild).Select(i => i.KindFor(scratch)));
+            if (kinds.Count == 0)
+            {
+                if (!scratch.KindMaciza) kinds.Add(SlabKind.Aligerada);
+                if (!scratch.KindAligerada) kinds.Add(SlabKind.Maciza);
+            }
+            Visibility alig = kinds.Contains(SlabKind.Aligerada) ? Visibility.Visible : Visibility.Collapsed;
+            Visibility mac = kinds.Contains(SlabKind.Maciza) ? Visibility.Visible : Visibility.Collapsed;
+            _aligGroup.Visibility = alig; _tempGroup.Visibility = alig;
+            _macBottomGroup.Visibility = mac; _macTopGroup.Visibility = mac;
 
             // controles que dependen de otros
             _angle.IsEnabled = scratch.Direction.Mode == "angle";
