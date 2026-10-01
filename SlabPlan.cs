@@ -264,12 +264,23 @@ namespace SlabRebar
                         Add(MakeBar(BarLayer.JoistBottom, true, v, zb, db, s, Mm(a.Bottom.ExtensionMm), !string.IsNullOrEmpty(a.Bottom.HookTypeName)));
             }
 
+            // --- cota del acero de temperatura: en la losa superior, al recubrimiento, como en el detalle tipico ---
+            // La barra de temperatura va arriba del todo (recubrimiento superior + medio diametro, o la
+            // profundidad que se indique) y los bastones se cuelgan justo por debajo de ella cuando
+            // coinciden en la misma franja, para cruzarse sin chocar. Asi la temperatura queda siempre
+            // dentro de la losa superior, sea cual sea el diametro del baston; si se le da una
+            // profundidad mayor (por debajo de los bastones), los bastones vuelven al recubrimiento.
+            double dt = a.Top.None ? 0 : d.JoistTop;
+            double dte = a.Temperature.Enabled ? d.Temperature : 0;
+            double tempDepth = a.Temperature.Enabled ? (a.Temperature.DepthMm > 0 ? Mm(a.Temperature.DepthMm) : CoverTop + 0.5 * dte) : 0;
+            double topFace = CoverTop;   // cara superior que les queda a los bastones
+            if (a.Temperature.Enabled && dt > 0 && tempDepth - 0.5 * dte < CoverTop + dt - _tol && tempDepth + 0.5 * dte > CoverTop + _tol)
+                topFace = tempDepth + 0.5 * dte;
+
             // --- bastones / barra superior corrida de cada vigueta ---
-            double dt = 0;
             if (!a.Top.None)
             {
-                dt = d.JoistTop;
-                double zt = Thickness - CoverTop - 0.5 * dt;
+                double zt = Thickness - topFace - 0.5 * dt;
                 LayerZ[BarLayer.JoistTop] = zt;
                 foreach (Joist j in Joists)
                     foreach (Span s in Outline.Cut(true, j.Axis, CoverEdge + 0.5 * dt, _tol))
@@ -279,8 +290,7 @@ namespace SlabRebar
             // --- acero de temperatura (perpendicular, en la losa superior) ---
             if (a.Temperature.Enabled)
             {
-                double dte = d.Temperature;
-                double z = a.Temperature.DepthMm > 0 ? Thickness - Mm(a.Temperature.DepthMm) : Thickness - CoverTop - dt - 0.5 * dte;
+                double z = Thickness - tempDepth;
                 LayerZ[BarLayer.Temperature] = z;
                 if (z - 0.5 * dte < Thickness - TopSlab - _tol)
                     Warnings.Add("el acero de temperatura queda por debajo de la losa superior (" + ToMm(Thickness - z) + " mm desde arriba, losa superior " + ToMm(TopSlab) + " mm)");

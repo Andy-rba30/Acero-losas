@@ -82,10 +82,14 @@ hormigón, así la barra guarda el recubrimiento con los bordes paralelos a ella
   unen. En los extremos que dan a un hueco no hay bastón. También pueden ser una **barra
   corrida** o **ninguna**.
 - **Acero de temperatura**: barras a lo largo de `v` (perpendiculares a las viguetas) en
-  la losa superior, cada `spacingMm` (250) como máximo, repartidas por igual. Van **justo
-  por debajo de los bastones** (recubrimiento superior + diámetro del bastón + medio
-  diámetro) para cruzarse sin chocar, o a la profundidad `depthMm` que se indique. Se avisa
-  si quedan por debajo de la losa superior.
+  la losa superior, cada `spacingMm` (250) como máximo, repartidas por igual. Van **arriba
+  del todo, al recubrimiento superior** (recubrimiento + medio diámetro), como en el
+  detalle típico de losa aligerada, o a la profundidad `depthMm` que se indique. Los
+  **bastones se cuelgan justo por debajo** de ellas cuando coinciden en la misma franja,
+  para cruzarse sin chocar; así la temperatura queda siempre dentro de la losa superior
+  sea cual sea el diámetro del bastón. Con una profundidad dada por debajo de los bastones,
+  estos vuelven al recubrimiento. Se avisa si la temperatura queda por debajo de la losa
+  superior o no respeta el recubrimiento.
 
 ### Losa maciza
 
@@ -122,7 +126,10 @@ qué se ha rechazado lo que no.
   huecos, vigas cercanas y el resumen del armado (o, en rojo, el motivo del rechazo). Cada
   fila armable tiene su **tipo** (general / aligerada / maciza) y su **dirección** propios.
   Clic en una fila para verla en los esquemas.
-- **Tipo de losa y dirección**: tipo por defecto, dirección general y ángulo.
+- **Tipo de losa y dirección**: tipo por defecto, dirección general y ángulo. Los grupos
+  de la aligerada y de la maciza **solo se muestran si se va a armar ese tipo** (según el
+  tipo por defecto, el nombre del tipo de suelo y las elecciones losa a losa); con losas de
+  los dos tipos se ven ambos.
 - **Losa aligerada**: ancho y separación de viguetas, losa superior, primera vigueta;
   barra inferior (tipo, 1 o 2, prolongación, gancho); barras superiores (bastones /
   corrida / ninguna, tipo, L/4 y L/5 o longitud fija, prolongación, gancho).
@@ -139,9 +146,13 @@ qué se ha rechazado lo que no.
   encajar. Al pasar el ratón por una barra se ve su capa, diámetro, posición y longitud.
 - **Sección transversal** a media luz: espesor, ladrillos y viguetas con la losa superior,
   cada barra que cruza el corte como un círculo (las que no cruzan, como los bastones de
-  apoyo, en hueco) y el acero perpendicular como una raya a su cota. Como la losa es muy
-  ancha respecto a su espesor, al encajar se ven unas tres viguetas centradas: se puede
-  ampliar, reducir y desplazar.
+  apoyo, en hueco) y el acero perpendicular como una raya a su cota. Va **acotada como el
+  detalle típico** de losa aligerada (en mm): espesor total a la derecha, losa superior y
+  altura del ladrillo a la izquierda, ancho de vigueta y de ladrillo debajo, y profundidad
+  del eje de la temperatura y de la barra inferior desde las caras, una sola vez en la
+  vigueta del centro para no saturar el dibujo. Como la losa es muy ancha respecto a su
+  espesor, al encajar se ven unas tres viguetas centradas: se puede ampliar, reducir y
+  desplazar.
 - **Guardar como valores por defecto** escribe `config.json`; **Armar** crea las barras;
   **Cancelar** no toca nada.
 

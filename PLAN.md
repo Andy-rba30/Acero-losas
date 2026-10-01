@@ -66,7 +66,9 @@ hormigon.
 6. **Tipo de losa**: por defecto segun el nombre del tipo (contiene "aliger" ->
    aligerada), con eleccion por losa en la lista.
 7. **Acero de temperatura (aligerada)**: barras a lo largo de `v` en la losa superior,
-   por debajo de los bastones (o a la profundidad que se indique), separacion dada.
+   al recubrimiento superior (o a la profundidad que se indique), como en el detalle
+   tipico; los bastones se cuelgan justo por debajo de ellas si coinciden en la misma
+   franja, asi la temperatura queda siempre dentro de la losa superior.
 8. **Red de seguridad**: igual que columnas. (1) antes de crear, eje + fibras a medio
    diametro dentro del solido en todas las posiciones del array (solo el tramo dentro
    del contorno); (2) tras regenerar, geometria real de cada barra. Cualquier fallo
@@ -86,6 +88,8 @@ hormigon.
 - [x] Compilacion (dotnet build con EnableWindowsTargeting): 0 errores, 0 avisos.
 - [x] Revision del codigo: union de tramos interiores por parametro al comprobar contra losa + vigas,
       vigas detectadas siempre y usadas segun la casilla, limitaciones documentadas.
+- [x] Correcciones tras la primera prueba: temperatura al recubrimiento en la losa superior (bastones
+      debajo), grupos de la ventana solo del tipo de losa que se arma, seccion acotada como el detalle.
 - [ ] Prueba en Revit 2027.2 por parte del usuario (no hay Revit en el entorno de la sesion).
 
 ## Como retomar

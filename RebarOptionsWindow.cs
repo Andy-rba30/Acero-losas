@@ -54,6 +54,8 @@ namespace SlabRebar
         private CheckBox _beams;
         private TextBlock _message, _partitionPreview, _previewCaption;
         private Button _buildButton;
+        // grupos que solo se muestran si se va a armar ese tipo de losa
+        private GroupBox _aligeradaGroup, _temperatureGroup, _macizaBottomGroup, _macizaTopGroup;
         private PlanPreview _plan;
         private SectionPreview _section;
 
@@ -122,10 +124,10 @@ namespace SlabRebar
 
             var left = new StackPanel();
             left.Children.Add(BuildKindAndDirection());
-            left.Children.Add(BuildAligerada());
-            left.Children.Add(BuildTemperature());
-            left.Children.Add(BuildMacizaBottom());
-            left.Children.Add(BuildMacizaTop());
+            left.Children.Add(_aligeradaGroup = BuildAligerada());
+            left.Children.Add(_temperatureGroup = BuildTemperature());
+            left.Children.Add(_macizaBottomGroup = BuildMacizaBottom());
+            left.Children.Add(_macizaTopGroup = BuildMacizaTop());
             left.Children.Add(BuildGeneral());
             var scroll = new ScrollViewer
             {
@@ -245,7 +247,8 @@ namespace SlabRebar
             _kind.Items.Add("maciza (mallas)");
             _kind.SelectedIndex = _cfg.KindAligerada ? 1 : _cfg.KindMaciza ? 2 : 0;
             AddRow(grid, r++, "Tipo por defecto:", _kind,
-                   "Tipo de losa que se arma cuando la fila de la losa dice \"general\". Con la primera opcion se mira el nombre del tipo de suelo.");
+                   "Tipo de losa que se arma cuando la fila de la losa dice \"general\". Con la primera opcion se mira el nombre del tipo de suelo. " +
+                   "Abajo solo se muestran los campos del tipo (o tipos) de losa que se va a armar.");
             _dir = new ComboBox { Margin = Pad };
             foreach (string l in DirLabels) _dir.Items.Add(l);
             _dir.SelectedIndex = Math.Max(0, Array.IndexOf(DirModes, _cfg.Direction.Mode));
@@ -259,7 +262,7 @@ namespace SlabRebar
             return group;
         }
 
-        private UIElement BuildAligerada()
+        private GroupBox BuildAligerada()
         {
             AligeradaCfg a = _cfg.Aligerada;
             var group = new GroupBox { Header = "Losa aligerada: viguetas, barra inferior y bastones", Padding = new Thickness(4) };
@@ -328,7 +331,7 @@ namespace SlabRebar
             return group;
         }
 
-        private UIElement BuildTemperature()
+        private GroupBox BuildTemperature()
         {
             TemperatureCfg t = _cfg.Aligerada.Temperature;
             var group = new GroupBox { Header = "Acero de temperatura (losa aligerada, perpendicular a las viguetas)", Padding = new Thickness(4) };
@@ -342,15 +345,16 @@ namespace SlabRebar
             AddRow(grid, r++, "Separacion (mm):", _teSp, "Separacion maxima entre barras de temperatura (250 es lo habitual); se reparten por igual sin superarla.");
             _teDepth = NumBox(t.DepthMm);
             AddRow(grid, r++, "Profundidad del eje (mm):", _teDepth,
-                   "Distancia de la cara superior al eje de la barra de temperatura. 0 = justo por debajo de los bastones (recubrimiento superior + diametro " +
-                   "del baston + medio diametro), para que se crucen sin chocar. Se avisa si queda por debajo de la losa superior.");
+                   "Distancia de la cara superior al eje de la barra de temperatura. 0 = al recubrimiento superior (recubrimiento + medio diametro), " +
+                   "dentro de la losa superior y encima de los bastones, que se cuelgan justo por debajo para cruzarse sin chocar. Con una profundidad " +
+                   "mayor que la de los bastones, estos vuelven al recubrimiento. Se avisa si queda por debajo de la losa superior.");
             _teExt = NumBox(t.ExtensionMm);
             AddRow(grid, r++, "Prolongacion (mm):", _teExt, "Cuanto sobresale del borde exterior de la losa hacia la viga. 0 = para al recubrimiento lateral.");
             group.Content = grid;
             return group;
         }
 
-        private UIElement BuildMacizaBottom()
+        private GroupBox BuildMacizaBottom()
         {
             MacizaCfg m = _cfg.Maciza;
             var group = new GroupBox { Header = "Losa maciza: malla inferior", Padding = new Thickness(4) };
@@ -386,7 +390,7 @@ namespace SlabRebar
             return group;
         }
 
-        private UIElement BuildMacizaTop()
+        private GroupBox BuildMacizaTop()
         {
             MacizaCfg m = _cfg.Maciza;
             var group = new GroupBox { Header = "Losa maciza: malla superior", Padding = new Thickness(4) };
@@ -748,6 +752,13 @@ namespace SlabRebar
             if (_building) return;
             AppConfig scratch = ReadConfig(out string error);
             MarkTypes(scratch);
+
+            // solo se muestran los campos del tipo de losa que se va a armar (los dos si hay losas de ambos tipos)
+            List<SlabKind> kinds = _items.Where(i => i.CanBuild).Select(i => i.KindFor(scratch)).Distinct().ToList();
+            bool showAligerada = kinds.Count == 0 ? !scratch.KindMaciza : kinds.Contains(SlabKind.Aligerada);
+            bool showMaciza = kinds.Count == 0 ? !scratch.KindAligerada : kinds.Contains(SlabKind.Maciza);
+            foreach (GroupBox g in new[] { _aligeradaGroup, _temperatureGroup }) g.Visibility = showAligerada ? Visibility.Visible : Visibility.Collapsed;
+            foreach (GroupBox g in new[] { _macizaBottomGroup, _macizaTopGroup }) g.Visibility = showMaciza ? Visibility.Visible : Visibility.Collapsed;
 
             // controles que dependen de otros
             _angle.IsEnabled = scratch.Direction.Mode == "angle";

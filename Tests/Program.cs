@@ -134,12 +134,13 @@ namespace SlabRebar.Tests
             Check(p.GroupsOf(BarLayer.JoistTop) == 2, "bastones en 2 conjuntos (" + p.GroupsOf(BarLayer.JoistTop) + ")");
             PlannedBar t = p.Bars.Where(x => x.Layer == BarLayer.JoistTop).OrderBy(x => x.Start).First();
             Near(t.Start, 25, "baston extremo desde el recubrimiento"); Near(t.End, 800, "baston L/5 = 800");
-            Near(t.Z, 200 - 25 - 6.35, "cota del baston");
+            Near(t.Z, 200 - 25 - 6.4 - 6.35, "cota del baston: justo debajo de la temperatura");
             Check(p.CountOf(BarLayer.Temperature) == 17, "17 barras de temperatura (" + p.CountOf(BarLayer.Temperature) + ")");
             PlannedBar te = p.Bars.First(x => x.Layer == BarLayer.Temperature);
             Check(!te.AlongU, "temperatura perpendicular a las viguetas");
             Near(te.Start, 25, "temperatura empieza al recubrimiento"); Near(te.End, 7975, "temperatura termina al recubrimiento");
-            Near(te.Z, 200 - 25 - 12.7 - 3.2, "temperatura bajo los bastones");
+            Near(te.Z, 200 - 25 - 3.2, "temperatura al recubrimiento, en la losa superior, encima de los bastones");
+            Check(!p.Warnings.Any(w => w.Contains("losa superior")), "la temperatura queda dentro de la losa superior");
             Check(p.Groups.Count == 4, "4 conjuntos en total (" + p.Groups.Count + ")");
             BarGroup g = p.Groups.First(x => x.Layer == BarLayer.JoistBottom);
             Near(g.Spacing, 400, "paso del conjunto inferior");
@@ -164,6 +165,26 @@ namespace SlabRebar.Tests
             p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, Diam());
             Check(p.CountOf(BarLayer.JoistTop) == 0, "sin barras superiores");
             Near(p.Bars.First(x => x.Layer == BarLayer.Temperature).Z, 200 - 25 - 3.2, "temperatura al recubrimiento sin bastones");
+
+            // baston grueso: la temperatura sigue al recubrimiento y el baston baja por debajo de ella
+            c.Aligerada.Top.Mode = "bastones";
+            PlanDiameters thick = Diam(); thick.JoistTop = Mm(35.8);
+            p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, thick);
+            Near(p.Bars.First(x => x.Layer == BarLayer.Temperature).Z, 200 - 25 - 3.2, "temperatura al recubrimiento con baston de 35.8");
+            Near(p.Bars.First(x => x.Layer == BarLayer.JoistTop).Z, 200 - 25 - 6.4 - 17.9, "baston de 35.8 colgado bajo la temperatura");
+            Check(!p.Warnings.Any(w => w.Contains("losa superior")), "sin aviso de losa superior con baston grueso");
+
+            // profundidad dada por debajo de los bastones: estos vuelven al recubrimiento
+            c.Aligerada.Temperature.DepthMm = 45;
+            p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, Diam());
+            Near(p.Bars.First(x => x.Layer == BarLayer.Temperature).Z, 200 - 45, "temperatura a la profundidad dada");
+            Near(p.Bars.First(x => x.Layer == BarLayer.JoistTop).Z, 200 - 25 - 6.35, "baston al recubrimiento con la temperatura por debajo");
+            // profundidad dada en la franja del baston: el baston baja
+            c.Aligerada.Temperature.DepthMm = 20;
+            p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, Diam());
+            Near(p.Bars.First(x => x.Layer == BarLayer.Temperature).Z, 200 - 20, "temperatura a 20 del borde superior (como en el detalle)");
+            Check(p.Warnings.Any(w => w.Contains("recubrimiento superior")), "aviso: a 20 no respeta el recubrimiento de 25");
+            Near(p.Bars.First(x => x.Layer == BarLayer.JoistTop).Z, 200 - 25 - 6.35, "baston al recubrimiento: la temperatura a 20 queda por encima de el");
 
             // temperatura demasiado profunda avisa
             c.Aligerada.Temperature.DepthMm = 80;
