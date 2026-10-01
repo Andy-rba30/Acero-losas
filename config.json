@@ -1,0 +1,81 @@
+{
+  "coverBottomMm": 25,
+  "coverTopMm": 25,
+  "coverEdgeMm": 25,
+
+  "kind": "auto",
+
+  "direction": {
+    "mode": "short",
+    "angleDeg": 0
+  },
+
+  "aligerada": {
+    "joistWidthMm": 100,
+    "joistSpacingMm": 400,
+    "topSlabMm": 50,
+    "firstJoistOffsetMm": 0,
+    "bottom": {
+      "barTypeName": "",
+      "count": 1,
+      "extensionMm": 0,
+      "hookTypeName": ""
+    },
+    "top": {
+      "mode": "bastones",
+      "barTypeName": "",
+      "interiorFraction": 0.25,
+      "endFraction": 0.2,
+      "fixedLengthMm": 0,
+      "extensionMm": 0,
+      "hookTypeName": ""
+    },
+    "temperature": {
+      "enabled": true,
+      "barTypeName": "",
+      "spacingMm": 250,
+      "depthMm": 0,
+      "extensionMm": 0
+    }
+  },
+
+  "maciza": {
+    "bottomMain": {
+      "barTypeName": "",
+      "spacingMm": 200,
+      "extensionMm": 0,
+      "hookTypeName": ""
+    },
+    "bottomSecondary": {
+      "enabled": true,
+      "barTypeName": "",
+      "spacingMm": 250,
+      "extensionMm": 0,
+      "hookTypeName": ""
+    },
+    "topMain": {
+      "mode": "ninguna",
+      "barTypeName": "",
+      "spacingMm": 200,
+      "interiorFraction": 0.25,
+      "endFraction": 0.2,
+      "fixedLengthMm": 0,
+      "extensionMm": 0,
+      "hookTypeName": ""
+    },
+    "topSecondary": {
+      "enabled": false,
+      "barTypeName": "",
+      "spacingMm": 250,
+      "extensionMm": 0,
+      "hookTypeName": ""
+    }
+  },
+
+  "detectBeams": true,
+
+  "partitionTemplate": "LOSA-{marca}",
+
+  "toleranceMm": 2,
+  "minBarLengthMm": 300
+}

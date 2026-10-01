@@ -26,14 +26,14 @@ hormigon.
 
 | Archivo | Que hace | Estado |
 |---------|----------|--------|
-| `SlabRebar.csproj`, `SlabRebar.addin`, `config.json`, `.gitignore` | Proyecto .NET 10 (net10.0-windows), manifiesto, configuracion | pendiente |
-| `RevitTheme.cs` | Tema oscuro de Revit (copiado del add-in de columnas, namespace `SlabRebar`) | pendiente |
-| `RibbonApp.cs` | Pestana ARBA compartida (`ArbaRibbon`) + boton **Losas** con icono propio | pendiente |
-| `AppConfig.cs` | Configuracion (`config.json`): recubrimientos, direccion, aligerada, maciza, temperatura, particion | pendiente |
-| `PartitionName.cs` | Plantilla del parametro Particion (`{marca}`, `{id}`, `{tipo}`, `{familia}`, `{conjunto}`, `{capa}`) | pendiente |
-| `Geometry2D.cs` | Geometria pura: `Pt`, poligonos con huecos, recorte de una recta contra el contorno (scan-line), eje del borde mas largo, caja envolvente | pendiente |
+| `SlabRebar.csproj`, `SlabRebar.addin`, `config.json`, `.gitignore` | Proyecto .NET 10 (net10.0-windows), manifiesto, configuracion | hecho |
+| `RevitTheme.cs` | Tema oscuro de Revit (copiado del add-in de columnas, namespace `SlabRebar`) | hecho |
+| `RibbonApp.cs` | Pestana ARBA compartida (`ArbaRibbon`) + boton **Losas** con icono propio | hecho |
+| `AppConfig.cs` | Configuracion (`config.json`): recubrimientos, direccion, aligerada, maciza, temperatura, particion | hecho |
+| `PartitionName.cs` | Plantilla del parametro Particion (`{marca}`, `{id}`, `{tipo}`, `{familia}`, `{conjunto}`, `{capa}`) | hecho |
+| `Geometry2D.cs` | Geometria pura: `Pt`, poligonos con huecos, recorte de una recta contra el contorno (scan-line), eje del borde mas largo, caja envolvente | hecho |
 | `SlabOutline.cs` | Lectura del solido de Revit: cara superior plana, contorno exterior y huecos, espesor, ejes locales, vigas de apoyo | pendiente |
-| `SlabPlan.cs` | Armado puro: viguetas, barras por capa y direccion, bastones por apoyos, temperatura, agrupacion en arrays | pendiente |
+| `SlabPlan.cs` | Armado puro: viguetas, barras por capa y direccion, bastones por apoyos, temperatura, agrupacion en arrays | hecho |
 | `HostAnalysis.cs` | Resultado por losa (contorno o motivo de rechazo) + elecciones por losa (tipo, direccion) | pendiente |
 | `RebarGenerator.cs` | Crea los `Rebar` con las dos redes de seguridad | pendiente |
 | `RebarOptionsWindow.cs` | Ventana WPF en codigo, mismo aspecto que columnas | pendiente |
@@ -41,7 +41,7 @@ hormigon.
 | `SectionPreview.cs` | Esquema de la seccion transversal (ladrillos, viguetas, barras, temperatura) | pendiente |
 | `ArmarLosaCommand.cs` | Comando externo: seleccion de losas, analisis, ventana, transaccion, informe | pendiente |
 | `README.md` | Documentacion de uso al estilo del add-in de columnas | pendiente |
-| `Tests/` | Programa de consola que prueba las clases puras (`Geometry2D`, `SlabPlan`) | pendiente |
+| `Tests/` | Programa de consola que prueba las clases puras (`Geometry2D`, `SlabPlan`): `cd Tests && dotnet run` | hecho (115 comprobaciones) |
 
 ## Decisiones de diseño
 
@@ -76,11 +76,17 @@ hormigon.
 
 - [x] Analisis del repo de referencia (Acero-columnas) y de su estilo visual.
 - [x] Plan guardado.
-- [ ] Proyecto, manifiesto, config, tema, cinta.
-- [ ] Geometria pura y plan de armado + pruebas de consola.
+- [x] Proyecto, manifiesto, config, tema, cinta.
+- [x] Geometria pura y plan de armado + pruebas de consola (115 OK).
 - [ ] Lectura del solido de Revit y apoyos.
 - [ ] Generador con redes de seguridad.
 - [ ] Ventana y esquemas.
 - [ ] Comando e informe.
 - [ ] README.
 - [ ] Compilacion (dotnet build con EnableWindowsTargeting) y pruebas.
+
+## Entorno de compilacion usado en la sesion
+
+`apt-get install dotnet-sdk-10.0` (Ubuntu 24.04) y `dotnet build` del proyecto principal con
+`EnableWindowsTargeting=true`: WPF y los paquetes `Nice3point.Revit.Api.*` 2027.2 compilan
+en Linux (solo para comprobar; la DLL se usa en Windows con Revit).
