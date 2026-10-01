@@ -16,6 +16,13 @@ namespace SlabRebar
         public bool AlongU;
         /// <summary>Tramo de la barra que queda dentro del contorno (coordenada a lo largo de su eje, pies): solo eso se comprueba.</summary>
         public double InA, InB;
+        /// <summary>
+        /// Tramo que se comprueba contra el hormigon: [InA, InB], abierto por el extremo en que
+        /// la barra lleva gancho y para dentro de la losa (asi el gancho real, que sobresale del
+        /// final del tramo recto, tambien se comprueba). La prolongacion hacia la viga sigue
+        /// sin comprobarse.
+        /// </summary>
+        public double CheckA, CheckB;
     }
 
     /// <summary>Resultado del armado de un elemento.</summary>
@@ -41,6 +48,8 @@ namespace SlabRebar
         private const double MinSeg = 0.003;   // ~1 mm en pies
         /// <summary>Longitud de barra que se tolera fuera del solido al comprobar (pies, ~1 mm).</summary>
         private const double InsideTol = 0.0033;
+        /// <summary>Extremo "abierto" del tramo comprobable (pies): mucho mas que cualquier losa.</summary>
+        private const double Open = 1e6;
 
         private sealed class Ctx
         {
@@ -77,6 +86,7 @@ namespace SlabRebar
                 c.Hooks[layer] = FindHookType(doc, lc.HookTypeName);
                 c.HookLeft[layer] = true;
                 SetDiameter(d, layer, bt.BarNominalDiameter);
+                if (c.Hooks[layer] != ElementId.InvalidElementId) d.Hooks[layer] = HookDimsOf(bt, c.Hooks[layer]);
             }
 
             c.Plan = SlabPlan.Build(f.Outline, f.Supports, f.Thickness, kind, cfg, d);
@@ -143,9 +153,11 @@ namespace SlabRebar
         /// Crea un conjunto (array de barras iguales). Antes comprueba que cada posicion del
         /// array queda dentro del hormigon (solo el tramo dentro del contorno; la prolongacion
         /// hacia la viga no se comprueba). Si la capa lleva gancho, tras crear la primera barra
-        /// lee su geometria real y, si el gancho dobla hacia el lado equivocado (abajo en una
+        /// lee su geometria real: si el gancho dobla hacia el lado equivocado (abajo en una
         /// capa inferior, arriba en una superior), la borra, invierte la orientacion y la
-        /// vuelve a crear. False si algo se rechazo.
+        /// vuelve a crear; y si el gancho es mas alto que el sitio que hay hasta el
+        /// recubrimiento opuesto, rechaza (si el gancho esta dentro de la losa) o avisa (si
+        /// esta en la prolongacion hacia la viga). False si algo se rechazo.
         /// </summary>
         private static bool Place(Ctx c, BarGroup g, int index)
         {
@@ -184,6 +196,10 @@ namespace SlabRebar
             bool hasHook = hook != ElementId.InvalidElementId && (b.HookStart || b.HookEnd);
             bool checkHook = hasHook && !c.HookChecked.Contains(b.Layer);
             bool wantUp = !Layers.IsTop(b.Layer);
+            // ganchos que paran dentro de la losa: ese extremo se comprueba entero, gancho incluido
+            bool hookInsideA = hasHook && b.HookStart && !b.ExtendsStart;
+            bool hookInsideB = hasHook && b.HookEnd && !b.ExtendsEnd;
+            double checkA = hookInsideA ? -Open : b.InA, checkB = hookInsideB ? Open : b.InB;
             for (int attempt = 0; attempt < 2; attempt++)
             {
                 bool left = c.HookLeft[b.Layer];
@@ -195,7 +211,9 @@ namespace SlabRebar
                 {
                     // RED DE SEGURIDAD (1b): el gancho solo existe en la geometria real
                     c.Doc.Regenerate();
-                    int dir = HookDirection(rb, z, r, c.Tol);
+                    HookExtent(rb, z, out double zMin, out double zMax);
+                    double limit = Math.Max(2 * r, c.Tol) + 1e-6;
+                    int dir = zMax > z + limit ? 1 : zMin < z - limit ? -1 : 0;
                     if (dir != 0 && (dir > 0) != wantUp)
                     {
                         c.Doc.Delete(rb.Id);
@@ -208,6 +226,26 @@ namespace SlabRebar
                         c.Result.Rejected.Add(name + ": los ganchos doblan hacia el lado equivocado con las dos orientaciones");
                         return false;
                     }
+                    if (dir == 0)
+                        c.Result.Warnings.Add(Layers.Name(b.Layer) + ": no se aprecia gancho en la geometria de la primera barra (sin desviacion vertical); revisa el tipo de gancho \"" +
+                                              (c.Doc.GetElement(hook)?.Name ?? "?") + "\" y la longitud de gancho del tipo de barra \"" + bt.Name + "\"");
+
+                    // RED DE SEGURIDAD (1c): altura real del gancho frente al sitio que hay hasta el recubrimiento opuesto
+                    double rise = (wantUp ? zMax - z : z - zMin) + r;   // del eje de la barra a la cara extrema del gancho
+                    double room = wantUp ? (f.ZBottom + f.Thickness - c.Plan.CoverTop) - z : z - (f.ZBottom + c.Plan.CoverBottom);
+                    if (dir != 0 && rise > room + c.Tol)
+                    {
+                        string msg = "el gancho " + (wantUp ? "sube " : "baja ") + ToMm(rise) + " mm desde el eje de la barra y solo hay " + ToMm(room) +
+                                     " mm hasta el recubrimiento " + (wantUp ? "superior" : "inferior") + " (longitud de gancho " + ToMm(HookDimsOf(bt, hook).Length) +
+                                     " mm del tipo de barra \"" + bt.Name + "\": reducela en Editar tipo > Longitudes de gancho o elige un gancho mas corto)";
+                        if (hookInsideA || hookInsideB)
+                        {
+                            c.Doc.Delete(rb.Id);
+                            c.Result.Rejected.Add(name + ": " + msg);
+                            return false;
+                        }
+                        c.Result.Warnings.Add(Layers.Name(b.Layer) + ": " + msg + "; el gancho queda en la prolongacion hacia la viga, que no se comprueba");
+                    }
                     c.HookChecked.Add(b.Layer);
                 }
 
@@ -215,7 +253,7 @@ namespace SlabRebar
                 else rb.GetShapeDrivenAccessor().SetLayoutAsSingle();
 
                 Finish(c.Doc, rb, c.Item.Partition(c.Cfg, SetName(b), Layers.Short(b.Layer)));
-                c.Result.Created.Add(new CreatedSet { Id = rb.Id, Name = name, Radius = r, AlongU = b.AlongU, InA = b.InA, InB = b.InB });
+                c.Result.Created.Add(new CreatedSet { Id = rb.Id, Name = name, Radius = r, AlongU = b.AlongU, InA = b.InA, InB = b.InB, CheckA = checkA, CheckB = checkB });
                 c.Result.Bars += g.Count;
                 c.Result.ByLayer[b.Layer] = (c.Result.ByLayer.TryGetValue(b.Layer, out int prev) ? prev : 0) + g.Count;
                 return true;
@@ -233,30 +271,43 @@ namespace SlabRebar
         }
 
         /// <summary>
-        /// Hacia donde dobla el gancho de la barra real: +1 arriba, -1 abajo, 0 sin desviacion
-        /// vertical apreciable (sin gancho o gancho en el plano horizontal).
+        /// Cotas minima y maxima del eje de la primera barra real (pies): con gancho, la del
+        /// extremo del gancho; sin el, la de la propia barra. Si no se puede leer, la barra
+        /// cuenta como plana a su cota (sin gancho).
         /// </summary>
-        private static int HookDirection(Rebar rb, double zBar, double r, double tol)
+        private static void HookExtent(Rebar rb, double zBar, out double zMin, out double zMax)
         {
+            zMin = double.MaxValue; zMax = double.MinValue;
             try
             {
                 IList<Curve> cl = rb.GetCenterlineCurves(false, false, false, MultiplanarOption.IncludeOnlyPlanarCurves, 0);
-                double zMin = double.MaxValue, zMax = double.MinValue;
                 foreach (Curve cv in cl)
                     foreach (XYZ p in cv.Tessellate()) { zMin = Math.Min(zMin, p.Z); zMax = Math.Max(zMax, p.Z); }
-                double limit = Math.Max(2 * r, tol) + 1e-6;
-                if (zMax > zBar + limit) return 1;
-                if (zMin < zBar - limit) return -1;
             }
             catch { }
-            return 0;
+            if (zMin > zMax) { zMin = zBar; zMax = zBar; }
+        }
+
+        /// <summary>
+        /// Medidas del gancho de un tipo de barra: la longitud total que Revit le da en
+        /// "Longitudes de gancho" del tipo y el diametro de doblado estandar de ganchos. Si la
+        /// API no las da, estimacion: 12 y 6 diametros.
+        /// </summary>
+        public static HookDims HookDimsOf(RebarBarType bt, ElementId hook)
+        {
+            double d = bt.BarNominalDiameter;
+            var h = new HookDims { Length = 12 * d, Bend = 6 * d };
+            try { double l = bt.GetHookLength(hook); if (l > 0) h.Length = l; } catch { }
+            try { double b = bt.StandardHookBendDiameter; if (b > 0) h.Bend = b; } catch { }
+            return h;
         }
 
         /// <summary>
         /// RED DE SEGURIDAD (2): tras crear y regenerar, se lee la geometria REAL de cada
         /// barra de cada conjunto tal y como la ha colocado Revit (radios de doblado, ganchos
         /// y todas las posiciones del array) y se comprueba contra el hormigon de la losa (y de
-        /// las vigas detectadas). Solo se comprueba el tramo dentro del contorno.
+        /// las vigas detectadas). Solo se comprueba el tramo dentro del contorno, incluido el
+        /// gancho de los extremos que paran dentro de la losa.
         /// </summary>
         public static void VerifyCreated(Document doc, HostAnalysis item, AppConfig cfg, BuildResult res)
         {
@@ -285,7 +336,7 @@ namespace SlabRebar
                 }
                 catch (Exception ex) { why = "barra " + (k + 1) + " de " + n + ": no se pudo leer su geometria (" + ex.Message + ")"; return false; }
                 if (cl == null || cl.Count == 0) { why = "barra " + (k + 1) + " de " + n + ": sin geometria"; return false; }
-                if (!BarInside(f, solids, cl, cs.Radius, cs.AlongU, cs.InA, cs.InB, out string w)) { why = "barra " + (k + 1) + " de " + n + ": " + w; return false; }
+                if (!BarInside(f, solids, cl, cs.Radius, cs.AlongU, cs.CheckA, cs.CheckB, out string w)) { why = "barra " + (k + 1) + " de " + n + ": " + w; return false; }
             }
             return true;
         }

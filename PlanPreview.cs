@@ -217,7 +217,7 @@ namespace SlabRebar
                 string tip = Layers.Name(b.Layer) + " Ø" + (b.D * FtToMm).ToString("0.#", CultureInfo.InvariantCulture) + " mm, " +
                              (b.AlongU ? "v=" : "u=") + Mm(b.Coord) + " mm, L=" + Mm(b.Length) + " mm (de " + Mm(b.Start) + " a " + Mm(b.End) +
                              "), cota " + Mm(b.Z) + " mm desde abajo" + (b.ExtendsStart || b.ExtendsEnd ? ", con prolongacion" : "") +
-                             (b.HookStart || b.HookEnd ? ", con gancho" : "");
+                             (b.HookStart || b.HookEnd ? ", con gancho" + (b.HookLength > 0 ? " de " + Mm(b.HookLength) + " mm (tipo de barra)" : "") : "");
                 // tramo dentro de la losa (continuo) y prolongaciones (a trazos)
                 Segment(b, b.InA, b.InB, X, Y, brush, th, false, tip);
                 if (b.ExtendsStart) Segment(b, b.Start, b.InA, X, Y, brush, th, true, tip);

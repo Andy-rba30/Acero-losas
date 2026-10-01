@@ -26,6 +26,8 @@ namespace SlabRebar
         private readonly Dictionary<string, string> _typeByDisplay = new Dictionary<string, string>();
         private readonly IList<string> _hookTypes;
         private readonly IDictionary<string, double> _hookAngles;
+        /// <summary>Medidas del gancho de cada par tipo de barra + tipo de gancho (clave HookDims.Key), leidas de Revit.</summary>
+        private readonly IDictionary<string, HookDims> _hookDims;
         private readonly IList<HostAnalysis> _items;
 
         /// <summary>Configuracion final si el usuario pulso "Armar"; null si cancelo.</summary>
@@ -73,9 +75,11 @@ namespace SlabRebar
         private static readonly Brush SelectedBrush = RevitTheme.Selection;
 
         public RebarOptionsWindow(AppConfig cfg, IList<string> barTypes, IDictionary<string, double> diametersMm,
-                                  IList<string> hookTypes, IDictionary<string, double> hookAngles, IList<HostAnalysis> items)
+                                  IList<string> hookTypes, IDictionary<string, double> hookAngles, IDictionary<string, HookDims> hookDims,
+                                  IList<HostAnalysis> items)
         {
             _hookAngles = hookAngles ?? new Dictionary<string, double>();
+            _hookDims = hookDims ?? new Dictionary<string, HookDims>();
             _cfg = cfg;
             _cfg.Normalize();
             _diametersMm = diametersMm;
@@ -295,7 +299,8 @@ namespace SlabRebar
                    "Numero de barras inferiores por vigueta (2 van lado a lado) y cuanto sobresalen del borde exterior de la losa hacia la viga " +
                    "(anclaje). 0 = paran al recubrimiento lateral. En los huecos siempre paran al recubrimiento.");
             _jbHook = HookCombo(a.Bottom.HookTypeName);
-            AddRow(grid, r++, "Gancho inferior:", _jbHook, "Tipo de gancho en los extremos exteriores de la barra inferior (dobla hacia arriba). Sin gancho = recta.");
+            AddRow(grid, r++, "Gancho inferior:", _jbHook, "Tipo de gancho en los extremos exteriores de la barra inferior (dobla hacia arriba), con o sin prolongacion: sin prolongacion el gancho queda dentro de la losa y su cara exterior guarda el recubrimiento. " +
+                   "Su longitud la fija el tipo de barra (Editar tipo > Longitudes de gancho): si no cabe en el espesor, el esquema avisa. Sin gancho = recta.");
 
             _jtMode = new ComboBox { Margin = Pad };
             foreach (string l in TopLabels) _jtMode.Items.Add(l);
@@ -693,7 +698,11 @@ namespace SlabRebar
             return v;
         }
 
-        /// <summary>Diametros de cada capa con esta configuracion; sin tipo elegido, uno orientativo para poder ver el esquema.</summary>
+        /// <summary>
+        /// Diametros de cada capa con esta configuracion (sin tipo elegido, uno orientativo para
+        /// poder ver el esquema) y medidas del gancho de las capas que lo llevan, para que el
+        /// plan avise ya en la ventana si el gancho no cabe en el espesor.
+        /// </summary>
         private PlanDiameters Diameters(AppConfig c, out bool allChosen)
         {
             allChosen = true;
@@ -708,6 +717,12 @@ namespace SlabRebar
                 double ft = DiameterFt(lc.BarTypeName);
                 if (ft <= 0) { ft = SlabPlan.Mm(fallbackMm); allChosen = false; }
                 RebarGenerator.SetDiameter(d, layer, ft);
+                if (!string.IsNullOrEmpty(lc.HookTypeName))
+                {
+                    string bar = RebarGenerator.MatchName(_barTypes, lc.BarTypeName);
+                    string hk = RebarGenerator.MatchName(_hookTypes, lc.HookTypeName);
+                    if (bar != null && hk != null && _hookDims.TryGetValue(HookDims.Key(bar, hk), out HookDims hd)) d.Hooks[layer] = hd;
+                }
             }
             return d;
         }

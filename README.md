@@ -56,11 +56,21 @@ ancho `recubrimiento + diámetro` alrededor de la recta tiene que quedar dentro 
 hormigón, así la barra guarda el recubrimiento con los bordes paralelos a ella.
 
 - En el **borde exterior** la barra para al recubrimiento lateral o, si se da una
-  **prolongación**, sobresale esa longitud hacia la viga (anclaje); ahí puede llevar
-  **gancho** (hacia arriba en las capas inferiores, hacia abajo en las superiores: el
-  plugin crea la primera barra, lee hacia dónde dobla el gancho y si es al revés la borra y
-  la vuelve a crear con la otra orientación). En los **huecos** siempre para al
-  recubrimiento y sin gancho.
+  **prolongación**, sobresale esa longitud hacia la viga (anclaje). En ese extremo puede
+  llevar **gancho**, con o sin prolongación (hacia arriba en las capas inferiores, hacia
+  abajo en las superiores: el plugin crea la primera barra, lee hacia dónde dobla el gancho
+  y si es al revés la borra y la vuelve a crear con la otra orientación). Sin prolongación
+  el gancho queda **dentro de la losa**: el tramo recto acaba antes (radio de doblado más un
+  diámetro) para que sea la cara exterior del gancho la que guarde el recubrimiento. En los
+  **huecos** siempre para al recubrimiento y sin gancho.
+- El **tamaño del gancho** no lo decide el plugin: lo fija Revit en el tipo de barra
+  (Editar tipo > Longitudes de gancho, por tipo de gancho; por defecto el multiplicador del
+  gancho, p. ej. 12 diámetros para 90°). El plugin lee esa longitud y, si no cabe entre la
+  barra y el recubrimiento opuesto (en una losa de 200 mm con 25 de recubrimiento caben
+  150 mm), lo avisa ya en la ventana; al armar, si el gancho queda dentro de la losa y
+  sobresale, rechaza la losa con la medida real; si queda en la prolongación hacia la viga,
+  solo avisa. Para ganchos más cortos: reducir la longitud de gancho del tipo de barra o
+  usar otro tipo de gancho.
 - Las barras iguales y equiespaciadas se crean como **un solo conjunto de Revit (array)**,
   igual que si se modelaran a mano (la fila de barras inferiores de un paño rectangular es
   un conjunto; si hay dos barras por vigueta, dos conjuntos entrelazados).
@@ -110,7 +120,9 @@ Igual que en columnas y muros: **o se arma la losa entera y bien, o no se arma**
    parte de barra que puede quedar fuera de la losa. Si se usan las vigas como apoyos, su
    hormigón también cuenta como válido (losa con muescas por uniones).
 2. **Después de crear y regenerar** se lee la geometría real de cada barra de cada
-   conjunto (ganchos y radios incluidos) y se vuelve a comprobar.
+   conjunto (ganchos y radios incluidos) y se vuelve a comprobar. Un gancho que para dentro
+   de la losa se comprueba entero (el tramo comprobable se abre por ese extremo); el que va
+   en la prolongación hacia la viga, no.
 3. Cualquier fallo deshace la subtransacción de ese elemento: no queda ni una barra.
 
 El informe final dice, losa a losa, qué se ha creado (barras por capa y conjuntos) y por

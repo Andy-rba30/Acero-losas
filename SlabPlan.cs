@@ -59,10 +59,37 @@ namespace SlabRebar
         public static bool IsTop(BarLayer l) => l == BarLayer.JoistTop || l == BarLayer.Temperature || l == BarLayer.TopMain || l == BarLayer.TopSecondary;
     }
 
-    /// <summary>Diametros (pies) de cada capa, ya resueltos a partir de los tipos de barra.</summary>
+    /// <summary>
+    /// Medidas del gancho de una capa (pies), tal y como las define Revit en el tipo de barra
+    /// (Editar tipo > Longitudes de gancho): el plugin no puede cambiarlas, solo leerlas.
+    /// </summary>
+    public sealed class HookDims
+    {
+        /// <summary>Longitud total del gancho, de fuera a fuera ("Longitud de gancho" del tipo de barra). 0 = desconocida.</summary>
+        public double Length;
+        /// <summary>Diametro interior de doblado del gancho. 0 = desconocido (se estima 6d).</summary>
+        public double Bend;
+
+        /// <summary>
+        /// Lo que el gancho invade en horizontal mas alla del final del tramo recto, hasta su
+        /// cara exterior: el radio de doblado del eje (bend/2 + d/2) mas medio diametro.
+        /// </summary>
+        public double Reach(double d) => (Bend > 0 ? 0.5 * Bend : 3 * d) + d;
+
+        public static HookDims Default(double d) => new HookDims { Length = 0, Bend = 6 * d };
+
+        /// <summary>Clave "tipo de barra + tipo de gancho" para las tablas que pasan de Revit a la ventana.</summary>
+        public static string Key(string barType, string hookType) => (barType ?? "") + "\n" + (hookType ?? "");
+    }
+
+    /// <summary>Diametros (pies) de cada capa, ya resueltos a partir de los tipos de barra, y medidas de su gancho si lo lleva.</summary>
     public sealed class PlanDiameters
     {
         public double JoistBottom, JoistTop, Temperature, BottomMain, BottomSecondary, TopMain, TopSecondary;
+        /// <summary>Medidas del gancho de cada capa con gancho (las que faltan se estiman).</summary>
+        public Dictionary<BarLayer, HookDims> Hooks = new Dictionary<BarLayer, HookDims>();
+
+        public HookDims HookOf(BarLayer l) => Hooks.TryGetValue(l, out HookDims h) ? h : null;
 
         public double Of(BarLayer l)
         {
@@ -92,6 +119,8 @@ namespace SlabRebar
         public bool AlongU;
         public double Coord, Z, Start, End, InA, InB, D;
         public bool HookStart, HookEnd;
+        /// <summary>Longitud total del gancho (pies) segun el tipo de barra; 0 si no lleva o no se conoce.</summary>
+        public double HookLength;
         public double Length => End - Start;
         public bool ExtendsStart => Start < InA - 1e-9;
         public bool ExtendsEnd => End > InB + 1e-9;
@@ -154,6 +183,8 @@ namespace SlabRebar
         public int Skipped;
 
         private double _tol, _minLen;
+        private PlanDiameters _d;
+        private readonly HashSet<BarLayer> _hookWarned = new HashSet<BarLayer>();
 
         public int CountOf(BarLayer l) => Bars.Count(b => b.Layer == l);
         public int GroupsOf(BarLayer l) => Groups.Count(g => g.Layer == l);
@@ -198,7 +229,7 @@ namespace SlabRebar
             {
                 Kind = kind, Outline = outline, Supports = supports ?? new List<Support>(), Thickness = thickness,
                 CoverBottom = Mm(cfg.CoverBottomMm), CoverTop = Mm(cfg.CoverTopMm), CoverEdge = Mm(cfg.CoverEdgeMm),
-                _tol = Mm(cfg.ToleranceMm), _minLen = Mm(cfg.MinBarLengthMm)
+                _tol = Mm(cfg.ToleranceMm), _minLen = Mm(cfg.MinBarLengthMm), _d = d
             };
             try
             {
@@ -358,24 +389,76 @@ namespace SlabRebar
             if (b != null) Bars.Add(b);
         }
 
-        /// <summary>Extremo de barra en el borde de un tramo: al recubrimiento dentro de la losa, o prolongado "ext" hacia fuera si es borde exterior.</summary>
-        private double StartOf(Span s, double ext) => s.HoleA || ext <= 0 ? s.A + CoverEdge : s.A - ext;
-        private double EndOf(Span s, double ext) => s.HoleB || ext <= 0 ? s.B - CoverEdge : s.B + ext;
+        /// <summary>Medidas del gancho de una capa: las leidas del tipo de barra o, si faltan, una estimacion (doblado 6d).</summary>
+        private HookDims HookOf(BarLayer layer, double d) => _d?.HookOf(layer) ?? HookDims.Default(d);
+
+        /// <summary>
+        /// Extremo del tramo recto de la barra en el borde de un tramo: en un hueco, al
+        /// recubrimiento; en el borde exterior, prolongado "ext" hacia la viga si se da
+        /// prolongacion y si no al recubrimiento. Si ese extremo lleva gancho y para dentro de
+        /// la losa, el tramo recto acaba antes (el radio de doblado mas un diametro), de modo
+        /// que la cara exterior del gancho, y no el final de la recta, es la que guarda el
+        /// recubrimiento lateral. Con prolongacion el gancho queda dentro de la viga y no se
+        /// retrasa nada.
+        /// </summary>
+        private double StartOf(Span s, double ext, BarLayer layer, double d, bool hook)
+        {
+            if (s.HoleA) return s.A + CoverEdge;
+            if (ext > 0) return s.A - ext;
+            return s.A + CoverEdge + (hook ? HookOf(layer, d).Reach(d) : 0);
+        }
+
+        private double EndOf(Span s, double ext, BarLayer layer, double d, bool hook)
+        {
+            if (s.HoleB) return s.B - CoverEdge;
+            if (ext > 0) return s.B + ext;
+            return s.B - CoverEdge - (hook ? HookOf(layer, d).Reach(d) : 0);
+        }
 
         /// <summary>Barra corrida en todo el tramo (null si queda demasiado corta).</summary>
         private PlannedBar MakeBar(BarLayer layer, bool alongU, double coord, double z, double d, Span s, double ext, bool hook) =>
-            MakeBar(layer, alongU, coord, z, d, s, StartOf(s, ext), EndOf(s, ext), hook);
+            MakeBar(layer, alongU, coord, z, d, s, StartOf(s, ext, layer, d, hook), EndOf(s, ext, layer, d, hook), ext, hook);
 
-        private PlannedBar MakeBar(BarLayer layer, bool alongU, double coord, double z, double d, Span s, double start, double end, bool hook)
+        /// <summary>
+        /// Barra de start a end dentro del tramo s. Lleva gancho en cada extremo exterior (no de
+        /// hueco) al que llega, tanto si para dentro de la losa como si se prolonga hacia la viga.
+        /// </summary>
+        private PlannedBar MakeBar(BarLayer layer, bool alongU, double coord, double z, double d, Span s, double start, double end, double ext, bool hook)
         {
             if (end - start < Math.Max(_minLen, _tol)) { Skipped++; return null; }
-            return new PlannedBar
+            var b = new PlannedBar
             {
                 Layer = layer, AlongU = alongU, Coord = coord, Z = z, D = d, Start = start, End = end,
                 InA = Math.Max(start, s.A), InB = Math.Min(end, s.B),
-                HookStart = hook && !s.HoleA && start <= s.A + _tol,
-                HookEnd = hook && !s.HoleB && end >= s.B - _tol
+                HookStart = hook && !s.HoleA && start <= StartOf(s, ext, layer, d, true) + _tol,
+                HookEnd = hook && !s.HoleB && end >= EndOf(s, ext, layer, d, true) - _tol
             };
+            if (b.HookStart || b.HookEnd)
+            {
+                b.HookLength = HookOf(layer, d).Length;
+                CheckHookFits(layer, z, d);
+            }
+            return b;
+        }
+
+        /// <summary>
+        /// Aviso (una vez por capa) si el gancho, con la longitud que le da el tipo de barra, no
+        /// cabe entre la barra y el recubrimiento opuesto: dobla hacia arriba en las capas
+        /// inferiores y hacia abajo en las superiores, asi que sobresaldria del hormigon. El
+        /// plugin no puede acortarlo: es un dato del tipo de barra de Revit.
+        /// </summary>
+        private void CheckHookFits(BarLayer layer, double z, double d)
+        {
+            if (!_hookWarned.Add(layer)) return;
+            HookDims h = _d?.HookOf(layer);
+            if (h == null || h.Length <= 0) return;
+            bool up = !Layers.IsTop(layer);
+            // de la cara de la barra opuesta al gancho hasta el recubrimiento hacia el que dobla
+            double room = up ? Thickness - CoverTop - (z - 0.5 * d) : (z + 0.5 * d) - CoverBottom;
+            if (h.Length <= room + _tol) return;
+            Warnings.Add("el gancho de la capa " + Layers.Name(layer) + " mide " + ToMm(h.Length) + " mm y solo caben " + ToMm(room) +
+                         " mm hasta el recubrimiento " + (up ? "superior" : "inferior") + ": sobresaldra del hormigon (dentro de la losa se rechaza; en la " +
+                         "prolongacion hacia la viga solo se avisa). Reduce la longitud de gancho del tipo de barra (Editar tipo > Longitudes de gancho) o elige un gancho mas corto");
         }
 
         /// <summary>
@@ -391,7 +474,7 @@ namespace SlabRebar
             bool hook = !string.IsNullOrEmpty(cfg.HookTypeName);
             if (cfg.Continuous) { Add(MakeBar(layer, alongU, coord, z, d, s, ext, hook)); return; }
 
-            double lo = StartOf(s, ext), hi = EndOf(s, ext);
+            double lo = StartOf(s, ext, layer, d, hook), hi = EndOf(s, ext, layer, d, hook);
             if (hi - lo <= _tol) { Skipped++; return; }
 
             List<Support> crossing = Supports.Where(x => x.Crosses(coord, _tol)).OrderBy(x => x.CU).ToList();
@@ -417,7 +500,7 @@ namespace SlabRebar
 
             var clamped = parts.Select(x => (Math.Max(lo, x.a), Math.Min(hi, x.b)));
             foreach ((double a, double b) in Geometry2D.Merge(clamped, 0))
-                Add(MakeBar(layer, alongU, coord, z, d, s, a, b, hook));
+                Add(MakeBar(layer, alongU, coord, z, d, s, a, b, ext, hook));
         }
 
         // -----------------------------------------------------------------

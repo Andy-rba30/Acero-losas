@@ -156,6 +156,49 @@ namespace SlabRebar.Tests
             Check(p.GroupsOf(BarLayer.JoistBottom) == 2, "las 40 barras (2 por vigueta) se entrelazan en 2 conjuntos (" + p.GroupsOf(BarLayer.JoistBottom) + ")");
             foreach (string w in p.Warnings) Console.WriteLine("  aviso: " + w);
 
+            // gancho sin prolongacion: el gancho queda dentro de la losa y el tramo recto acaba antes
+            // (radio de doblado 38.1 + diametro 12.7) para que la cara exterior del gancho guarde el recubrimiento
+            c.Aligerada.Bottom.ExtensionMm = 0; c.Aligerada.Bottom.Count = 1;
+            PlanDiameters dh = Diam();
+            dh.Hooks[BarLayer.JoistBottom] = new HookDims { Length = Mm(152.4), Bend = Mm(76.2) };
+            p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, dh);
+            Check(p.Error == null, "sin error con gancho sin prolongacion: " + p.Error);
+            b = p.Bars.First(x => x.Layer == BarLayer.JoistBottom);
+            Check(b.HookStart && b.HookEnd, "ganchos en los dos extremos aunque no haya prolongacion");
+            Near(b.Start, 25 + 38.1 + 12.7, "el tramo recto deja sitio al doblado del gancho");
+            Near(b.End, 4000 - 25 - 38.1 - 12.7, "y en el otro extremo");
+            Near(b.InA, 25 + 38.1 + 12.7, "el tramo comprobable empieza en la recta");
+            Check(!b.ExtendsStart && !b.ExtendsEnd, "la barra no sobresale");
+            Near(b.HookLength, 152.4, "longitud del gancho del tipo de barra");
+            Check(p.Warnings.Any(w => w.Contains("gancho") && w.Contains("152") && w.Contains("150")),
+                  "aviso: gancho de 152 mm donde solo caben 150 (" + string.Join("; ", p.Warnings) + ")");
+            Check(p.Warnings.Count(w => w.Contains("gancho")) == 1, "el aviso del gancho sale una sola vez por capa");
+            dh.Hooks[BarLayer.JoistBottom] = new HookDims { Length = Mm(120), Bend = Mm(76.2) };
+            p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, dh);
+            Check(!p.Warnings.Any(w => w.Contains("gancho")), "sin aviso con gancho de 120 mm");
+            // con prolongacion el gancho va en la viga: la recta no se retrasa
+            c.Aligerada.Bottom.ExtensionMm = 150;
+            p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, dh);
+            b = p.Bars.First(x => x.Layer == BarLayer.JoistBottom);
+            Near(b.Start, -150, "con prolongacion la recta llega a la viga"); Check(b.HookStart, "y lleva gancho");
+            c.Aligerada.Bottom.ExtensionMm = 0;
+            // sin medidas conocidas del gancho: doblado estimado 6d y sin aviso de tamano
+            p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, Diam());
+            b = p.Bars.First(x => x.Layer == BarLayer.JoistBottom);
+            Near(b.Start, 25 + 3 * 12.7 + 12.7, "sin medidas: doblado estimado 6d");
+            Check(b.HookStart && b.HookLength == 0, "gancho tambien sin medidas conocidas");
+            Check(!p.Warnings.Any(w => w.Contains("gancho")), "sin medidas no se avisa del tamano");
+            // bastones con gancho sin prolongacion: solo en el extremo del borde
+            c.Aligerada.Top.HookTypeName = "90";
+            p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, Diam());
+            PlannedBar tb = p.Bars.Where(x => x.Layer == BarLayer.JoistTop).OrderBy(x => x.Start).First();
+            Check(tb.HookStart && !tb.HookEnd, "baston extremo: gancho solo en el borde");
+            Near(tb.Start, 25 + 50.8, "el baston deja sitio al gancho");
+            c.Aligerada.Top.HookTypeName = "";
+            // se deja la configuracion como estaba para el resto de comprobaciones
+            c.Aligerada.Bottom.ExtensionMm = 150; c.Aligerada.Bottom.Count = 2;
+            p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, Diam());
+
             // corrida
             c.Aligerada.Top.Mode = "corrida";
             p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, Diam());

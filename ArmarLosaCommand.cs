@@ -57,12 +57,17 @@ namespace SlabRebar
                 try { deg = Math.Round(h.HookAngle * 180 / Math.PI); } catch { }
                 hookAngles[h.Name] = deg;
             }
+            // medidas de cada gancho con cada tipo de barra (longitud y doblado), para avisar ya en la ventana si no cabe
+            var hookDims = new Dictionary<string, HookDims>();
+            foreach (RebarBarType bt in allTypes)
+                foreach (RebarHookType h in allHooks)
+                    hookDims[HookDims.Key(bt.Name, h.Name)] = RebarGenerator.HookDimsOf(bt, h.Id);
 
             // --- 1. Analisis geometrico de cada elemento (solo lectura, sin transaccion) ---
             var items = hosts.Select(h => HostAnalysis.Analyze(doc, h, cfg)).ToList();
 
             // --- 2. Interfaz: el usuario revisa que se ha detectado y elige el armado ---
-            var win = new RebarOptionsWindow(cfg.Clone(), barTypes, diametersMm, hookTypes, hookAngles, items);
+            var win = new RebarOptionsWindow(cfg.Clone(), barTypes, diametersMm, hookTypes, hookAngles, hookDims, items);
             try { new WindowInteropHelper(win).Owner = commandData.Application.MainWindowHandle; } catch { }
             bool? ok = win.ShowDialog();
             if (ok != true || win.Result == null) return Result.Cancelled;
