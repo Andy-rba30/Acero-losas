@@ -23,6 +23,8 @@ namespace SlabRebar
         /// sin comprobarse.
         /// </summary>
         public double CheckA, CheckB;
+        /// <summary>Franjas en que la barra cruza la viga entre dos panos (acero corrido): no se comprueban contra la losa.</summary>
+        public List<(double a, double b)> Gaps = new List<(double a, double b)>();
     }
 
     /// <summary>Resultado del armado de un elemento.</summary>
@@ -156,8 +158,9 @@ namespace SlabRebar
         /// lee su geometria real: si el gancho dobla hacia el lado equivocado (abajo en una
         /// capa inferior, arriba en una superior), la borra, invierte la orientacion y la
         /// vuelve a crear; y si el gancho es mas alto que el sitio que hay hasta el
-        /// recubrimiento opuesto, rechaza (si el gancho esta dentro de la losa) o avisa (si
-        /// esta en la prolongacion hacia la viga). False si algo se rechazo.
+        /// recubrimiento opuesto (el plan ya ha acercado la barra a su cara lo que ha podido),
+        /// solo avisa: invade el recubrimiento, y si llegara a salirse del hormigon lo
+        /// rechazara la comprobacion de la geometria real. False si algo se rechazo.
         /// </summary>
         private static bool Place(Ctx c, BarGroup g, int index)
         {
@@ -186,7 +189,7 @@ namespace SlabRebar
                     Transform t = Transform.CreateTranslation(normal * (k * g.Spacing));
                     moved = curves.Select(cv => cv.CreateTransformed(t)).ToList();
                 }
-                if (!BarInside(f, f.CheckSolids, moved, r, b.AlongU, b.InA, b.InB, out string why))
+                if (!BarInside(f, f.CheckSolids, moved, r, b.AlongU, Ranges(b.InA, b.InB, b.Gaps), out string why))
                 {
                     c.Result.Rejected.Add(name + (k > 0 ? " (posicion " + (k + 1) + " del array)" : "") + ": " + why);
                     return false;
@@ -236,15 +239,12 @@ namespace SlabRebar
                     if (dir != 0 && rise > room + c.Tol)
                     {
                         string msg = "el gancho " + (wantUp ? "sube " : "baja ") + ToMm(rise) + " mm desde el eje de la barra y solo hay " + ToMm(room) +
-                                     " mm hasta el recubrimiento " + (wantUp ? "superior" : "inferior") + " (longitud de gancho " + ToMm(HookDimsOf(bt, hook).Length) +
-                                     " mm del tipo de barra \"" + bt.Name + "\": reducela en Editar tipo > Longitudes de gancho o elige un gancho mas corto)";
-                        if (hookInsideA || hookInsideB)
-                        {
-                            c.Doc.Delete(rb.Id);
-                            c.Result.Rejected.Add(name + ": " + msg);
-                            return false;
-                        }
-                        c.Result.Warnings.Add(Layers.Name(b.Layer) + ": " + msg + "; el gancho queda en la prolongacion hacia la viga, que no se comprueba");
+                                     " mm hasta el recubrimiento " + (wantUp ? "superior" : "inferior") + ": invade " + ToMm(rise - room) + " mm el recubrimiento" +
+                                     " (longitud de gancho " + ToMm(HookDimsOf(bt, hook).Length) + " mm del tipo de barra \"" + bt.Name +
+                                     "\": reducela en Editar tipo > Longitudes de gancho o elige un gancho mas corto)";
+                        c.Result.Warnings.Add(Layers.Name(b.Layer) + ": " + msg + (hookInsideA || hookInsideB
+                            ? "; se arma igualmente, solo se rechazaria si el gancho se saliera del hormigon"
+                            : "; el gancho queda en la prolongacion hacia la viga, que no se comprueba"));
                     }
                     c.HookChecked.Add(b.Layer);
                 }
@@ -253,7 +253,7 @@ namespace SlabRebar
                 else rb.GetShapeDrivenAccessor().SetLayoutAsSingle();
 
                 Finish(c.Doc, rb, c.Item.Partition(c.Cfg, SetName(b), Layers.Short(b.Layer)));
-                c.Result.Created.Add(new CreatedSet { Id = rb.Id, Name = name, Radius = r, AlongU = b.AlongU, InA = b.InA, InB = b.InB, CheckA = checkA, CheckB = checkB });
+                c.Result.Created.Add(new CreatedSet { Id = rb.Id, Name = name, Radius = r, AlongU = b.AlongU, InA = b.InA, InB = b.InB, CheckA = checkA, CheckB = checkB, Gaps = b.Gaps });
                 c.Result.Bars += g.Count;
                 c.Result.ByLayer[b.Layer] = (c.Result.ByLayer.TryGetValue(b.Layer, out int prev) ? prev : 0) + g.Count;
                 return true;
@@ -336,23 +336,40 @@ namespace SlabRebar
                 }
                 catch (Exception ex) { why = "barra " + (k + 1) + " de " + n + ": no se pudo leer su geometria (" + ex.Message + ")"; return false; }
                 if (cl == null || cl.Count == 0) { why = "barra " + (k + 1) + " de " + n + ": sin geometria"; return false; }
-                if (!BarInside(f, solids, cl, cs.Radius, cs.AlongU, cs.CheckA, cs.CheckB, out string w)) { why = "barra " + (k + 1) + " de " + n + ": " + w; return false; }
+                if (!BarInside(f, solids, cl, cs.Radius, cs.AlongU, Ranges(cs.CheckA, cs.CheckB, cs.Gaps), out string w)) { why = "barra " + (k + 1) + " de " + n + ": " + w; return false; }
             }
             return true;
         }
 
         /// <summary>
-        /// True si el tramo de la barra que queda dentro del contorno (coordenada a lo largo de
-        /// su eje entre inA e inB) esta dentro del hormigon. Ademas del eje se comprueban
-        /// cuatro fibras extremas (eje desplazado +-r en horizontal perpendicular y en
-        /// vertical), asi una barra tangente a una cara o con medio diametro fuera tambien falla.
+        /// Tramo [a, b] de la barra menos las franjas en que cruza la viga entre dos panos: lo
+        /// que se comprueba contra el hormigon de la losa.
         /// </summary>
-        private static bool BarInside(SlabFrame f, List<Solid> solids, IList<Curve> curves, double r, bool alongU, double inA, double inB, out string why)
+        private static List<(double a, double b)> Ranges(double a, double b, List<(double a, double b)> gaps)
+        {
+            var list = new List<(double a, double b)>();
+            double from = a;
+            foreach ((double ga, double gb) in gaps.OrderBy(g => g.a))
+            {
+                if (ga > from) list.Add((from, Math.Min(ga, b)));
+                from = Math.Max(from, gb);
+            }
+            if (b > from) list.Add((from, b));
+            return list;
+        }
+
+        /// <summary>
+        /// True si los tramos de la barra que quedan dentro del contorno (coordenadas a lo largo
+        /// de su eje) estan dentro del hormigon. Ademas del eje se comprueban cuatro fibras
+        /// extremas (eje desplazado +-r en horizontal perpendicular y en vertical), asi una
+        /// barra tangente a una cara o con medio diametro fuera tambien falla.
+        /// </summary>
+        private static bool BarInside(SlabFrame f, List<Solid> solids, IList<Curve> curves, double r, bool alongU, IList<(double a, double b)> ranges, out string why)
         {
             why = null;
             XYZ side = alongU ? f.DirV : f.DirU;
             var shifts = new List<XYZ> { XYZ.Zero, side * r, side * -r, XYZ.BasisZ * r, XYZ.BasisZ * -r };
-            IEnumerable<Curve> toCheck = curves.SelectMany(cv => ClipToRange(f, cv, alongU, inA + InsideTol, inB - InsideTol));
+            IEnumerable<Curve> toCheck = ranges.SelectMany(rg => curves.SelectMany(cv => ClipToRange(f, cv, alongU, rg.a + InsideTol, rg.b - InsideTol)));
             foreach (Curve cv in toCheck)
                 foreach (XYZ sh in shifts)
                 {

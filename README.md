@@ -67,10 +67,19 @@ hormigón, así la barra guarda el recubrimiento con los bordes paralelos a ella
   (Editar tipo > Longitudes de gancho, por tipo de gancho; por defecto el multiplicador del
   gancho, p. ej. 12 diámetros para 90°). El plugin lee esa longitud y, si no cabe entre la
   barra y el recubrimiento opuesto (en una losa de 200 mm con 25 de recubrimiento caben
-  150 mm), lo avisa ya en la ventana; al armar, si el gancho queda dentro de la losa y
-  sobresale, rechaza la losa con la medida real; si queda en la prolongación hacia la viga,
-  solo avisa. Para ganchos más cortos: reducir la longitud de gancho del tipo de barra o
-  usar otro tipo de gancho.
+  150 mm), **acerca la barra a su propia cara lo que falte** (sin dejar menos de un
+  diámetro, y nunca menos de 10 mm, de recubrimiento propio; los bastones bajo la
+  temperatura y las capas secundarias que descansan sobre otra no se mueven) y lo avisa ya
+  en la ventana con la nueva cota. Si ni así cabe, el gancho invade el recubrimiento
+  opuesto y solo se avisa: la losa se arma igualmente y únicamente se rechaza si el gancho
+  llegara a salirse del hormigón (lo detecta la comprobación de la geometría real). Para
+  ganchos más cortos: reducir la longitud de gancho del tipo de barra o usar otro tipo de
+  gancho.
+- Con un suelo de **varios paños separados por vigas**, el acero de temperatura es
+  **corrido**: una recta que cruza varios paños da una sola barra que pasa por encima de las
+  vigas que los separan (franjas de hasta 1 m), en vez de partirse en cada viga. La franja
+  sobre la viga no se comprueba contra la losa (como la prolongación). En los huecos sí se
+  parte.
 - Las barras iguales y equiespaciadas se crean como **un solo conjunto de Revit (array)**,
   igual que si se modelaran a mano (la fila de barras inferiores de un paño rectangular es
   un conjunto; si hay dos barras por vigueta, dos conjuntos entrelazados).
@@ -154,10 +163,11 @@ qué se ha rechazado lo que no.
   encajar. Al pasar el ratón por una barra se ve su capa, diámetro, posición y longitud.
 - **Sección transversal** a media luz: espesor, ladrillos y viguetas con la losa superior,
   cada barra que cruza el corte como un círculo (las que no cruzan, como los bastones de
-  apoyo, en hueco) y el acero perpendicular como una raya a su cota (con varios paños, un
-  tramo por paño). Como la losa es muy
-  ancha respecto a su espesor, al encajar se ven unas tres viguetas centradas: se puede
-  ampliar, reducir y desplazar.
+  apoyo, en hueco) y el acero perpendicular como una raya a su cota. Acotaciones: línea de
+  cota del espesor (y de la losa superior y el ladrillo en la aligerada) y, junto a cada
+  capa, su nombre, diámetro y cota desde la cara inferior, siempre en la zona visible. Como
+  la losa es muy ancha respecto a su espesor, al encajar se ven unas tres viguetas
+  centradas: se puede ampliar, reducir y desplazar.
 - **Guardar como valores por defecto** escribe `config.json`; **Armar** crea las barras;
   **Cancelar** no toca nada.
 

@@ -193,8 +193,20 @@ namespace SlabRebar
 
             if (_plan.Error != null) { Text(_plan.Error, 10, 24, Brushes.Firebrick, 12); return; }
 
+            // acotaciones: linea de cota vertical del espesor (y de la losa superior) en el borde
+            // derecho visible, y a cada capa su nombre, diametro y cota en la zona visible
+            double xl = Math.Max(X(o.VMin), 0) + 6;                       // borde izquierdo visible de la losa
+            double xd = Math.Min(X(o.VMax), W) - 22;                      // linea de cota a la derecha
+            DimensionV(xd, Y(0), Y(t), Mm(t), Brushes.DimGray, false);
+            if (_plan.Kind == SlabKind.Aligerada && _plan.Joists.Count > 0)
+            {
+                double hb = t - _plan.TopSlab;
+                DimensionV(xd - 14, Y(hb), Y(t), Mm(_plan.TopSlab), PlanColors.JoistEdge, true);
+                DimensionV(xd - 14, Y(0), Y(hb), Mm(hb), PlanColors.BrickEdge, true);
+            }
+
             // acero perpendicular (a lo largo de v): la recta mas cercana al corte de cada capa, como una raya
-            // a su cota. Con varios panos (o huecos) esa recta esta partida en un tramo por pano: se dibujan todos.
+            // a su cota. Con varios panos la temperatura corrida es una sola barra; con huecos esta partida: se dibujan todos los tramos.
             foreach (var layer in _plan.Bars.Where(b => !b.AlongU).GroupBy(b => b.Layer))
             {
                 double coord = layer.OrderBy(x => Math.Abs(x.Coord - uCut)).First().Coord;
@@ -212,7 +224,7 @@ namespace SlabRebar
                     };
                     Children.Add(ln);
                 }
-                Text(Layers.Name(b.Layer) + " Ø" + (b.D * FtToMm).ToString("0.#", CultureInfo.InvariantCulture), X(o.VMin) + 4, Y(b.Z) - 14, brush, 9);
+                Text(Layers.Name(b.Layer) + " Ø" + (b.D * FtToMm).ToString("0.#", CultureInfo.InvariantCulture) + " · cota " + Mm(b.Z) + " mm", xl, Y(b.Z) - 14, brush, 9);
             }
 
             // barras a lo largo de u: circulos (llenos si cruzan el corte, huecos si no, p. ej. bastones de los apoyos)
@@ -232,6 +244,26 @@ namespace SlabRebar
                 SetLeft(e, X(b.Coord) - rr); SetTop(e, Y(b.Z) - rr);
                 Children.Add(e);
             }
+
+            // etiqueta de cada capa a lo largo de u, junto a la barra mas cercana al centro de la zona visible
+            foreach (var layer in _plan.Bars.Where(b => b.AlongU).GroupBy(b => b.Layer))
+            {
+                PlannedBar b = layer.OrderBy(x => Math.Abs(X(x.Coord) - 0.5 * W)).First();
+                double rr = Math.Max(2.2, 0.5 * b.D * k);
+                bool top = Layers.IsTop(b.Layer);
+                Text(Layers.Name(b.Layer) + " Ø" + (b.D * FtToMm).ToString("0.#", CultureInfo.InvariantCulture) + " · cota " + Mm(b.Z) + " mm",
+                     X(b.Coord) + rr + 4, top ? Y(b.Z) + rr : Y(b.Z) - rr - 13, PlanColors.Of(b.Layer), 9);
+            }
+        }
+
+        /// <summary>Linea de cota vertical entre y1 e y2 (pixeles) con sus marcas y el valor (mm) a la derecha o a la izquierda.</summary>
+        private void DimensionV(double x, double y1, double y2, string value, Brush brush, bool textLeft)
+        {
+            if (Math.Abs(y1 - y2) < 4) return;
+            Children.Add(new Line { X1 = x, Y1 = y1, X2 = x, Y2 = y2, Stroke = brush, StrokeThickness = 0.8 });
+            foreach (double y in new[] { y1, y2 })
+                Children.Add(new Line { X1 = x - 4, Y1 = y, X2 = x + 4, Y2 = y, Stroke = brush, StrokeThickness = 0.8 });
+            Text(value, textLeft ? x - 6 - 5.5 * value.Length : x + 3, 0.5 * (y1 + y2) - 7, brush, 9);
         }
 
         private static double Mm1(double mm) => mm / FtToMm;

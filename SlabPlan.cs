@@ -121,6 +121,12 @@ namespace SlabRebar
         public bool HookStart, HookEnd;
         /// <summary>Longitud total del gancho (pies) segun el tipo de barra; 0 si no lleva o no se conoce.</summary>
         public double HookLength;
+        /// <summary>
+        /// Franjas (coordenada a lo largo del eje) en que la barra cruza la viga que separa dos
+        /// panos: ahi va dentro del hormigon de la viga, no de la losa, asi que no se comprueban
+        /// contra ella (como la prolongacion). Vacio salvo en el acero corrido entre panos.
+        /// </summary>
+        public List<(double a, double b)> Gaps = new List<(double a, double b)>();
         public double Length => End - Start;
         public bool ExtendsStart => Start < InA - 1e-9;
         public bool ExtendsEnd => End > InB + 1e-9;
@@ -130,7 +136,15 @@ namespace SlabRebar
             Layer == o.Layer && AlongU == o.AlongU && Math.Abs(Z - o.Z) <= tol && Math.Abs(D - o.D) <= 1e-9 &&
             Math.Abs(Start - o.Start) <= tol && Math.Abs(End - o.End) <= tol &&
             Math.Abs(InA - o.InA) <= tol && Math.Abs(InB - o.InB) <= tol &&
-            HookStart == o.HookStart && HookEnd == o.HookEnd;
+            HookStart == o.HookStart && HookEnd == o.HookEnd && SameGaps(o, tol);
+
+        private bool SameGaps(PlannedBar o, double tol)
+        {
+            if (Gaps.Count != o.Gaps.Count) return false;
+            for (int i = 0; i < Gaps.Count; i++)
+                if (Math.Abs(Gaps[i].a - o.Gaps[i].a) > tol || Math.Abs(Gaps[i].b - o.Gaps[i].b) > tol) return false;
+            return true;
+        }
     }
 
     /// <summary>Barras iguales y equiespaciadas: un conjunto (array) de Revit.</summary>
@@ -184,7 +198,8 @@ namespace SlabRebar
 
         private double _tol, _minLen;
         private PlanDiameters _d;
-        private readonly HashSet<BarLayer> _hookWarned = new HashSet<BarLayer>();
+        /// <summary>Anchura maxima (mm) de la franja entre dos panos que el acero corrido cruza: la viga que los separa.</summary>
+        public const double MaxPanelGapMm = 1000;
 
         public int CountOf(BarLayer l) => Bars.Count(b => b.Layer == l);
         public int GroupsOf(BarLayer l) => Groups.Count(g => g.Layer == l);
@@ -276,7 +291,7 @@ namespace SlabRebar
 
             // --- barra inferior de cada vigueta ---
             double db = d.JoistBottom;
-            double zb = CoverBottom + 0.5 * db;
+            double zb = FitHook(BarLayer.JoistBottom, CoverBottom + 0.5 * db, db, Hooked(a.Bottom), MinCover(db) + 0.5 * db);
             LayerZ[BarLayer.JoistBottom] = zb;
             double off = 0;
             if (a.Bottom.Count >= 2)
@@ -292,7 +307,7 @@ namespace SlabRebar
                 double[] lines = a.Bottom.Count >= 2 ? new[] { j.Axis - off, j.Axis + off } : new[] { j.Axis };
                 foreach (double v in lines)
                     foreach (Span s in Outline.Cut(true, v, CoverEdge + 0.5 * db, _tol))
-                        Add(MakeBar(BarLayer.JoistBottom, true, v, zb, db, s, Mm(a.Bottom.ExtensionMm), !string.IsNullOrEmpty(a.Bottom.HookTypeName)));
+                        Add(MakeBar(BarLayer.JoistBottom, true, v, zb, db, s, Mm(a.Bottom.ExtensionMm), Hooked(a.Bottom)));
             }
 
             // --- acero de temperatura (perpendicular, en la losa superior): es la capa mas alta, al
@@ -310,6 +325,8 @@ namespace SlabRebar
                 double dt = d.JoistTop;
                 double top = a.Temperature.Enabled ? Math.Min(Thickness - CoverTop, zte - 0.5 * dte) : Thickness - CoverTop;
                 double zt = top - 0.5 * dt;
+                // con gancho que no quepa: bajo la temperatura no puede subir; sin ella, hasta el recubrimiento minimo
+                zt = FitHook(BarLayer.JoistTop, zt, dt, Hooked(a.Top), a.Temperature.Enabled ? zt : Thickness - MinCover(dt) - 0.5 * dt);
                 LayerZ[BarLayer.JoistTop] = zt;
                 foreach (Joist j in Joists)
                     foreach (Span s in Outline.Cut(true, j.Axis, CoverEdge + 0.5 * dt, _tol))
@@ -318,16 +335,17 @@ namespace SlabRebar
 
             if (a.Temperature.Enabled)
             {
-                double z = zte;
-                LayerZ[BarLayer.Temperature] = z;
-                if (z - 0.5 * dte < Thickness - TopSlab - _tol)
-                    Warnings.Add("el acero de temperatura queda por debajo de la losa superior (" + ToMm(Thickness - z) + " mm desde arriba, losa superior " + ToMm(TopSlab) + " mm)");
-                if (z + 0.5 * dte > Thickness - CoverTop + _tol)
+                if (zte - 0.5 * dte < Thickness - TopSlab - _tol)
+                    Warnings.Add("el acero de temperatura queda por debajo de la losa superior (" + ToMm(Thickness - zte) + " mm desde arriba, losa superior " + ToMm(TopSlab) + " mm)");
+                if (zte + 0.5 * dte > Thickness - CoverTop + _tol)
                     Warnings.Add("el acero de temperatura no respeta el recubrimiento superior");
+                double z = FitHook(BarLayer.Temperature, zte, dte, Hooked(a.Temperature), Thickness - MinCover(dte) - 0.5 * dte);
+                LayerZ[BarLayer.Temperature] = z;
+                // acero corrido: una recta que cruza varios panos da una sola barra que pasa por encima de las vigas que los separan
                 double from = Outline.UMin + CoverEdge + 0.5 * dte, to = Outline.UMax - CoverEdge - 0.5 * dte;
                 foreach (double u in Geometry2D.Positions(from, to, Mm(a.Temperature.SpacingMm), _tol))
-                    foreach (Span s in Outline.Cut(false, u, CoverEdge + 0.5 * dte, _tol))
-                        Add(MakeBar(BarLayer.Temperature, false, u, z, dte, s, Mm(a.Temperature.ExtensionMm), !string.IsNullOrEmpty(a.Temperature.HookTypeName)));
+                    foreach ((Span s, List<(double a, double b)> gaps) in JoinPanels(Outline.Cut(false, u, CoverEdge + 0.5 * dte, _tol), false, u))
+                        Add(MakeBar(BarLayer.Temperature, false, u, z, dte, s, Mm(a.Temperature.ExtensionMm), Hooked(a.Temperature), gaps));
             }
         }
 
@@ -340,7 +358,7 @@ namespace SlabRebar
 
             // --- inferior principal (a lo largo de u, repartida en v) ---
             double d1 = d.BottomMain;
-            double z1 = CoverBottom + 0.5 * d1;
+            double z1 = FitHook(BarLayer.BottomMain, CoverBottom + 0.5 * d1, d1, Hooked(m.BottomMain), MinCover(d1) + 0.5 * d1);
             LayerZ[BarLayer.BottomMain] = z1;
             Mesh(BarLayer.BottomMain, true, z1, d1, m.BottomMain);
 
@@ -348,17 +366,18 @@ namespace SlabRebar
             if (m.BottomSecondary.Enabled)
             {
                 double d2 = d.BottomSecondary;
-                double z2 = CoverBottom + d1 + 0.5 * d2;
+                double z2 = z1 + 0.5 * d1 + 0.5 * d2;
+                z2 = FitHook(BarLayer.BottomSecondary, z2, d2, Hooked(m.BottomSecondary), z2);   // descansa sobre la principal: no baja
                 LayerZ[BarLayer.BottomSecondary] = z2;
                 Mesh(BarLayer.BottomSecondary, false, z2, d2, m.BottomSecondary);
             }
 
             // --- superior principal: bastones o corrida ---
-            double dt1 = 0;
+            double dt1 = 0, zt1 = 0;
             if (!m.TopMain.None)
             {
                 dt1 = d.TopMain;
-                double zt1 = Thickness - CoverTop - 0.5 * dt1;
+                zt1 = FitHook(BarLayer.TopMain, Thickness - CoverTop - 0.5 * dt1, dt1, Hooked(m.TopMain), Thickness - MinCover(dt1) - 0.5 * dt1);
                 LayerZ[BarLayer.TopMain] = zt1;
                 double from = Outline.VMin + CoverEdge + 0.5 * dt1, to = Outline.VMax - CoverEdge - 0.5 * dt1;
                 foreach (double v in Geometry2D.Positions(from, to, Mm(m.TopMain.SpacingMm), _tol))
@@ -370,7 +389,8 @@ namespace SlabRebar
             if (m.TopSecondary.Enabled)
             {
                 double dt2 = d.TopSecondary;
-                double zt2 = Thickness - CoverTop - dt1 - 0.5 * dt2;
+                double zt2 = dt1 > 0 ? zt1 - 0.5 * dt1 - 0.5 * dt2 : Thickness - CoverTop - 0.5 * dt2;
+                zt2 = FitHook(BarLayer.TopSecondary, zt2, dt2, Hooked(m.TopSecondary), dt1 > 0 ? zt2 : Thickness - MinCover(dt2) - 0.5 * dt2);   // bajo la principal no sube
                 LayerZ[BarLayer.TopSecondary] = zt2;
                 Mesh(BarLayer.TopSecondary, false, zt2, dt2, m.TopSecondary);
             }
@@ -399,6 +419,87 @@ namespace SlabRebar
         /// <summary>Medidas del gancho de una capa: las leidas del tipo de barra o, si faltan, una estimacion (doblado 6d).</summary>
         private HookDims HookOf(BarLayer layer, double d) => _d?.HookOf(layer) ?? HookDims.Default(d);
 
+        private static bool Hooked(LayerCfg cfg) => !string.IsNullOrEmpty(cfg.HookTypeName);
+
+        /// <summary>Recubrimiento minimo que se le deja a una barra al acercarla a su cara para que le quepa el gancho: un diametro, y no menos de 10 mm.</summary>
+        private static double MinCover(double d) => Math.Max(d, Mm(10));
+
+        /// <summary>
+        /// Cota de una capa con gancho. El gancho dobla hacia la cara opuesta (arriba en las
+        /// capas inferiores, abajo en las superiores) y mide lo que diga el tipo de barra: si no
+        /// cabe entre la barra y el recubrimiento opuesto, la barra se acerca a su propia cara lo
+        /// que falte, como mucho hasta "limit" (la cota mas proxima a esa cara que se admite), y
+        /// se avisa. Si ni asi cabe, el gancho invade el recubrimiento opuesto y solo se avisa (el
+        /// plugin no puede acortarlo: es un dato del tipo de barra de Revit); solo si llegara a
+        /// sobresalir del hormigon lo rechazara la comprobacion al armar.
+        /// </summary>
+        private double FitHook(BarLayer layer, double z, double d, bool hook, double limit)
+        {
+            HookDims h = hook ? _d?.HookOf(layer) : null;
+            if (h == null || h.Length <= 0) return z;
+            bool up = !Layers.IsTop(layer);
+            // de la cara de la barra opuesta al gancho hasta el recubrimiento hacia el que dobla
+            double room = up ? Thickness - CoverTop - (z - 0.5 * d) : (z + 0.5 * d) - CoverBottom;
+            if (h.Length <= room + _tol) return z;
+            double need = h.Length - room;
+            double can = Math.Max(0, up ? z - limit : limit - z);
+            double shift = Math.Min(need, can);
+            double z2 = up ? z - shift : z + shift;
+            double left = need - shift;
+            string opp = up ? "superior" : "inferior", own = up ? "inferior" : "superior";
+            string msg = "el gancho de la capa " + Layers.Name(layer) + " mide " + ToMm(h.Length) + " mm y solo caben " + ToMm(room) + " mm hasta el recubrimiento " + opp;
+            if (shift > _tol)
+                msg += ": la barra se " + (up ? "baja " : "sube ") + ToMm(shift) + " mm para que quepa (recubrimiento " + own + " de " +
+                       ToMm(up ? z2 - 0.5 * d : Thickness - z2 - 0.5 * d) + " mm)";
+            if (left > _tol)
+            {
+                double oppCover = up ? CoverTop : CoverBottom;
+                msg += (shift > _tol ? "; aun asi" : ":") + " el gancho invade " + ToMm(Math.Min(left, oppCover)) + " mm el recubrimiento " + opp +
+                       (left > oppCover + _tol ? " y sobresale " + ToMm(left - oppCover) + " mm del hormigon (al armar se rechazara)" : " (solo aviso)") +
+                       ". Para evitarlo reduce la longitud de gancho del tipo de barra (Editar tipo > Longitudes de gancho) o elige un gancho mas corto";
+            }
+            Warnings.Add(msg);
+            return z2;
+        }
+
+        /// <summary>
+        /// Tramos de una recta unidos a traves de las vigas que separan los panos: dos tramos
+        /// consecutivos con extremos exteriores (no de hueco), en panos distintos y separados
+        /// como mucho MaxPanelGapMm se funden en uno, y la franja entre ellos se anota como
+        /// paso por la viga (no se comprueba contra la losa). Asi el acero corrido pasa de un
+        /// pano al siguiente en vez de partirse en cada viga.
+        /// </summary>
+        private List<(Span span, List<(double a, double b)> gaps)> JoinPanels(List<Span> spans, bool alongU, double coord)
+        {
+            var result = new List<(Span, List<(double a, double b)>)>();
+            var gaps = new List<(double a, double b)>();
+            Span cur = default;
+            bool has = false;
+            double eps = Math.Max(_tol, Mm(1));
+            foreach (Span s in spans)
+            {
+                if (has && Outline.Outers.Count > 1 && !cur.HoleB && !s.HoleA && s.A - cur.B <= Mm(MaxPanelGapMm) + _tol &&
+                    DifferentPanels(alongU, coord, cur.B - eps, s.A + eps))
+                {
+                    if (s.A - cur.B > _tol) gaps.Add((cur.B, s.A));
+                    cur = new Span(cur.A, s.B, cur.HoleA, s.HoleB);
+                    continue;
+                }
+                if (has) result.Add((cur, gaps));
+                cur = s; gaps = new List<(double a, double b)>(); has = true;
+            }
+            if (has) result.Add((cur, gaps));
+            return result;
+        }
+
+        /// <summary>True si los dos puntos de la recta (coordenadas a lo largo de ella) caen en panos distintos.</summary>
+        private bool DifferentPanels(bool alongU, double coord, double t1, double t2)
+        {
+            int p1 = Outline.PanelAt(alongU ? new Pt(t1, coord) : new Pt(coord, t1));
+            int p2 = Outline.PanelAt(alongU ? new Pt(t2, coord) : new Pt(coord, t2));
+            return p1 >= 0 && p2 >= 0 && p1 != p2;
+        }
+
         /// <summary>
         /// Extremo del tramo recto de la barra en el borde de un tramo: en un hueco, al
         /// recubrimiento; en el borde exterior, prolongado "ext" hacia la viga si se da
@@ -423,14 +524,15 @@ namespace SlabRebar
         }
 
         /// <summary>Barra corrida en todo el tramo (null si queda demasiado corta).</summary>
-        private PlannedBar MakeBar(BarLayer layer, bool alongU, double coord, double z, double d, Span s, double ext, bool hook) =>
-            MakeBar(layer, alongU, coord, z, d, s, StartOf(s, ext, layer, d, hook), EndOf(s, ext, layer, d, hook), ext, hook);
+        private PlannedBar MakeBar(BarLayer layer, bool alongU, double coord, double z, double d, Span s, double ext, bool hook, List<(double a, double b)> gaps = null) =>
+            MakeBar(layer, alongU, coord, z, d, s, StartOf(s, ext, layer, d, hook), EndOf(s, ext, layer, d, hook), ext, hook, gaps);
 
         /// <summary>
         /// Barra de start a end dentro del tramo s. Lleva gancho en cada extremo exterior (no de
         /// hueco) al que llega, tanto si para dentro de la losa como si se prolonga hacia la viga.
         /// </summary>
-        private PlannedBar MakeBar(BarLayer layer, bool alongU, double coord, double z, double d, Span s, double start, double end, double ext, bool hook)
+        private PlannedBar MakeBar(BarLayer layer, bool alongU, double coord, double z, double d, Span s, double start, double end, double ext, bool hook,
+                                   List<(double a, double b)> gaps = null)
         {
             if (end - start < Math.Max(_minLen, _tol)) { Skipped++; return null; }
             var b = new PlannedBar
@@ -438,34 +540,11 @@ namespace SlabRebar
                 Layer = layer, AlongU = alongU, Coord = coord, Z = z, D = d, Start = start, End = end,
                 InA = Math.Max(start, s.A), InB = Math.Min(end, s.B),
                 HookStart = hook && !s.HoleA && start <= StartOf(s, ext, layer, d, true) + _tol,
-                HookEnd = hook && !s.HoleB && end >= EndOf(s, ext, layer, d, true) - _tol
+                HookEnd = hook && !s.HoleB && end >= EndOf(s, ext, layer, d, true) - _tol,
+                Gaps = gaps ?? new List<(double a, double b)>()
             };
-            if (b.HookStart || b.HookEnd)
-            {
-                b.HookLength = HookOf(layer, d).Length;
-                CheckHookFits(layer, z, d);
-            }
+            if (b.HookStart || b.HookEnd) b.HookLength = HookOf(layer, d).Length;
             return b;
-        }
-
-        /// <summary>
-        /// Aviso (una vez por capa) si el gancho, con la longitud que le da el tipo de barra, no
-        /// cabe entre la barra y el recubrimiento opuesto: dobla hacia arriba en las capas
-        /// inferiores y hacia abajo en las superiores, asi que sobresaldria del hormigon. El
-        /// plugin no puede acortarlo: es un dato del tipo de barra de Revit.
-        /// </summary>
-        private void CheckHookFits(BarLayer layer, double z, double d)
-        {
-            if (!_hookWarned.Add(layer)) return;
-            HookDims h = _d?.HookOf(layer);
-            if (h == null || h.Length <= 0) return;
-            bool up = !Layers.IsTop(layer);
-            // de la cara de la barra opuesta al gancho hasta el recubrimiento hacia el que dobla
-            double room = up ? Thickness - CoverTop - (z - 0.5 * d) : (z + 0.5 * d) - CoverBottom;
-            if (h.Length <= room + _tol) return;
-            Warnings.Add("el gancho de la capa " + Layers.Name(layer) + " mide " + ToMm(h.Length) + " mm y solo caben " + ToMm(room) +
-                         " mm hasta el recubrimiento " + (up ? "superior" : "inferior") + ": sobresaldra del hormigon (dentro de la losa se rechaza; en la " +
-                         "prolongacion hacia la viga solo se avisa). Reduce la longitud de gancho del tipo de barra (Editar tipo > Longitudes de gancho) o elige un gancho mas corto");
         }
 
         /// <summary>

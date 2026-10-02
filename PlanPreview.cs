@@ -217,9 +217,17 @@ namespace SlabRebar
                 string tip = Layers.Name(b.Layer) + " Ø" + (b.D * FtToMm).ToString("0.#", CultureInfo.InvariantCulture) + " mm, " +
                              (b.AlongU ? "v=" : "u=") + Mm(b.Coord) + " mm, L=" + Mm(b.Length) + " mm (de " + Mm(b.Start) + " a " + Mm(b.End) +
                              "), cota " + Mm(b.Z) + " mm desde abajo" + (b.ExtendsStart || b.ExtendsEnd ? ", con prolongacion" : "") +
-                             (b.HookStart || b.HookEnd ? ", con gancho" + (b.HookLength > 0 ? " de " + Mm(b.HookLength) + " mm (tipo de barra)" : "") : "");
-                // tramo dentro de la losa (continuo) y prolongaciones (a trazos)
-                Segment(b, b.InA, b.InB, X, Y, brush, th, false, tip);
+                             (b.HookStart || b.HookEnd ? ", con gancho" + (b.HookLength > 0 ? " de " + Mm(b.HookLength) + " mm (tipo de barra)" : "") : "") +
+                             (b.Gaps.Count > 0 ? ", corrida sobre " + b.Gaps.Count + (b.Gaps.Count == 1 ? " viga entre panos" : " vigas entre panos") : "");
+                // tramo dentro de la losa (continuo; a trazos donde cruza la viga entre dos panos) y prolongaciones (a trazos)
+                double from = b.InA;
+                foreach ((double ga, double gb) in b.Gaps)
+                {
+                    Segment(b, from, ga, X, Y, brush, th, false, tip);
+                    Segment(b, ga, gb, X, Y, brush, th, true, tip);
+                    from = gb;
+                }
+                Segment(b, from, b.InB, X, Y, brush, th, false, tip);
                 if (b.ExtendsStart) Segment(b, b.Start, b.InA, X, Y, brush, th, true, tip);
                 if (b.ExtendsEnd) Segment(b, b.InB, b.End, X, Y, brush, th, true, tip);
                 // marcas de gancho

@@ -106,6 +106,14 @@ namespace SlabRebar
             return _transposed;
         }
 
+        /// <summary>Indice del pano (anillo exterior) que contiene el punto, o -1 si no esta en ninguno (los huecos no se miran).</summary>
+        public int PanelAt(Pt p)
+        {
+            for (int i = 0; i < Outers.Count; i++)
+                if (Geometry2D.PointInRing(Outers[i], p)) return i;
+            return -1;
+        }
+
         /// <summary>True si el punto esta dentro de la losa (fuera de los huecos), regla par-impar.</summary>
         public bool Contains(Pt p)
         {

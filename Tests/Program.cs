@@ -173,9 +173,33 @@ namespace SlabRebar.Tests
             Check(p.Warnings.Any(w => w.Contains("gancho") && w.Contains("152") && w.Contains("150")),
                   "aviso: gancho de 152 mm donde solo caben 150 (" + string.Join("; ", p.Warnings) + ")");
             Check(p.Warnings.Count(w => w.Contains("gancho")) == 1, "el aviso del gancho sale una sola vez por capa");
+            // el gancho no cabe por 2.4 mm: la barra baja eso (recubrimiento inferior 22.6) en vez de rechazarse
+            Near(b.Z, 25 + 6.35 - 2.4, "la barra inferior baja lo que le falta al gancho", 0.1);
+            Near(p.LayerZ[BarLayer.JoistBottom], 25 + 6.35 - 2.4, "y la cota de la capa tambien", 0.1);
+            Check(p.Warnings.Any(w => w.Contains("se baja") && w.Contains("solo aviso") == false), "el aviso dice que la barra se baja");
+            // gancho mucho mas largo: la barra baja hasta el recubrimiento minimo (un diametro) y el resto invade el recubrimiento superior
+            dh.Hooks[BarLayer.JoistBottom] = new HookDims { Length = Mm(170), Bend = Mm(76.2) };
+            p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, dh);
+            b = p.Bars.First(x => x.Layer == BarLayer.JoistBottom);
+            Check(p.Error == null, "sin error aunque el gancho invada el recubrimiento: " + p.Error);
+            Near(b.Z, 12.7 + 6.35, "baja hasta dejar un diametro de recubrimiento");
+            Check(p.Warnings.Any(w => w.Contains("invade") && w.Contains("solo aviso")), "aviso de que el gancho invade el recubrimiento superior (" + string.Join("; ", p.Warnings.Where(w => w.Contains("gancho"))) + ")");
+            // gancho que ni asi cabe en el hormigon: se avisa de que sobresale (lo rechaza la comprobacion al armar)
+            dh.Hooks[BarLayer.JoistBottom] = new HookDims { Length = Mm(230), Bend = Mm(76.2) };
+            p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, dh);
+            Check(p.Warnings.Any(w => w.Contains("sobresale") && w.Contains("rechazara")), "aviso de que el gancho sobresale del hormigon");
             dh.Hooks[BarLayer.JoistBottom] = new HookDims { Length = Mm(120), Bend = Mm(76.2) };
             p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, dh);
             Check(!p.Warnings.Any(w => w.Contains("gancho")), "sin aviso con gancho de 120 mm");
+            Near(p.Bars.First(x => x.Layer == BarLayer.JoistBottom).Z, 25 + 6.35, "y la barra se queda al recubrimiento");
+            // bastones bajo la temperatura no pueden subir: el gancho invade el recubrimiento inferior y solo se avisa
+            c.Aligerada.Top.HookTypeName = "90";
+            dh.Hooks[BarLayer.JoistTop] = new HookDims { Length = Mm(152.4), Bend = Mm(76.2) };
+            p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, dh);
+            Check(p.Error == null, "sin error con gancho de baston que no cabe: " + p.Error);
+            Near(p.LayerZ[BarLayer.JoistTop], 200 - 25 - 6.4 - 6.35, "el baston sigue justo bajo la temperatura");
+            Check(p.Warnings.Any(w => w.Contains("baston") && w.Contains("invade") && !w.Contains("se sube")), "aviso: el gancho del baston invade el recubrimiento inferior sin mover la barra");
+            c.Aligerada.Top.HookTypeName = "";
             // con prolongacion el gancho va en la viga: la recta no se retrasa
             c.Aligerada.Bottom.ExtensionMm = 150;
             p = SlabPlan.Build(Rect(4000, 8000), new List<Support>(), Mm(200), SlabKind.Aligerada, c, dh);
@@ -308,10 +332,26 @@ namespace SlabRebar.Tests
             Check(p.Joists.Count >= 19 && p.Joists.Count <= 21, "viguetas repartidas en 8.3 m (" + p.Joists.Count + ")");
             int inGap = p.Bars.Count(b => b.Layer == BarLayer.JoistBottom && b.Coord > Mm(4000) && b.Coord < Mm(4300));
             Check(inGap == 0, "ninguna barra inferior en la franja de la viga (" + inGap + ")");
+            // la temperatura es acero corrido: una sola barra que pasa por encima de la viga entre los dos panos
             PlannedBar te = p.Bars.Where(b => b.Layer == BarLayer.Temperature).OrderBy(b => b.Start).First();
-            Near(te.End, 3975, "temperatura del pano 1 para al recubrimiento del borde del pano");
-            Check(p.Bars.Where(b => b.Layer == BarLayer.Temperature).Any(b => Math.Abs(b.Start - Mm(4325)) < 1e-6), "temperatura del pano 2 empieza al recubrimiento");
-            Check(p.Bars.All(b => o.Contains(new Pt(b.AlongU ? 0.5 * (b.InA + b.InB) : b.Coord, b.AlongU ? b.Coord : 0.5 * (b.InA + b.InB)))), "todas las barras dentro de algun pano");
+            Near(te.Start, 25, "temperatura corrida empieza al recubrimiento del pano 1");
+            Near(te.End, 8275, "y termina al recubrimiento del pano 2");
+            Check(te.Gaps.Count == 1, "cruza una viga (" + te.Gaps.Count + ")");
+            if (te.Gaps.Count == 1) { Near(te.Gaps[0].a, 4000, "la franja de la viga empieza al borde del pano 1"); Near(te.Gaps[0].b, 4300, "y acaba al borde del pano 2"); }
+            Check(p.Bars.Where(b => b.Layer == BarLayer.Temperature && b.Coord < Mm(1000) - 1e-6 || b.Layer == BarLayer.Temperature && b.Coord > Mm(1500) + 1e-6).All(b => b.Gaps.Count == 1),
+                  "fuera del hueco, toda la temperatura es corrida");
+            Check(p.Bars.Where(b => b.Layer == BarLayer.Temperature && b.Coord > Mm(1000) + 1e-6 && b.Coord < Mm(1500) - 1e-6).Count() >= 2,
+                  "en la franja del hueco la temperatura se parte en el hueco, no en la viga");
+            Check(p.GroupsOf(BarLayer.Temperature) <= 4, "la temperatura corrida se agrupa en pocos conjuntos (" + p.GroupsOf(BarLayer.Temperature) + ")");
+            Check(p.Bars.All(b => Pieces(b).All(t => o.Contains(new Pt(b.AlongU ? t : b.Coord, b.AlongU ? b.Coord : t)))), "todos los tramos comprobables dentro de algun pano");
+        }
+
+        /// <summary>Punto medio de cada tramo comprobable de la barra (entre las franjas de viga entre panos).</summary>
+        private static IEnumerable<double> Pieces(PlannedBar b)
+        {
+            double from = b.InA;
+            foreach ((double a, double g) in b.Gaps) { yield return 0.5 * (from + a); from = g; }
+            yield return 0.5 * (from + b.InB);
         }
 
         private static void LShape()
