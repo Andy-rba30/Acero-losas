@@ -158,14 +158,15 @@ qué se ha rechazado lo que no.
   superior principal, morado temperatura e inferior secundaria, azul superior secundaria),
   prolongaciones a trazos y marcas de gancho. Rueda: zoom; arrastrar: mover; doble clic:
   encajar. Al pasar el ratón por una barra se ve su capa, diámetro, posición y longitud.
-- **Sección transversal** a media luz: espesor, ladrillos y viguetas con la losa superior,
-  cada barra que cruza el corte como un círculo (las que no cruzan, como los bastones de
-  apoyo, en hueco) y el acero perpendicular como una raya a su cota (con varios paños, un
-  tramo por paño). Acotaciones: línea de
-  cota del espesor (y de la losa superior y el ladrillo en la aligerada) y, junto a cada
-  capa, su nombre, diámetro y cota desde la cara inferior, siempre en la zona visible. Como
-  la losa es muy ancha respecto a su espesor, al encajar se ven unas tres viguetas
-  centradas: se puede ampliar, reducir y desplazar.
+- **Sección transversal** a media luz, como el detalle típico de un plano: no se dibuja la
+  losa entera (saturaba el esquema) sino un módulo con marcas de corte a los lados (en la
+  aligerada dos viguetas del centro con el ladrillo entre ellas y medio ladrillo a cada
+  lado; en la maciza un metro), con sus cotas en mm: espesor, losa superior y altura del
+  ladrillo, anchos de vigueta y ladrillo, recubrimientos superior e inferior. Cada barra
+  que cruza el corte es un círculo (las que no cruzan, como los bastones de apoyo, en
+  hueco) y el acero perpendicular una raya a su cota con su rótulo de directriz (capa,
+  diámetro y separación); en la cabecera, cada capa que cruza el corte con su diámetro y
+  su cota desde la cara inferior. Se puede ampliar, reducir y desplazar.
 - **Guardar como valores por defecto** escribe `config.json`; **Armar** crea las barras;
   **Cancelar** no toca nada.
 

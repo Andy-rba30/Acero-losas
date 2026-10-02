@@ -498,7 +498,7 @@ namespace SlabRebar
             grid.Children.Add(planGroup);
 
             var secGroup = new GroupBox { Header = "Seccion transversal a media luz (rueda: zoom, arrastrar: mover, doble clic: encajar)", Padding = new Thickness(4), Margin = new Thickness(0, 6, 0, 0) };
-            _section = new SectionPreview { MinHeight = 140 };
+            _section = new SectionPreview { MinHeight = 200 };
             secGroup.Content = new Border { BorderBrush = RevitTheme.Border, BorderThickness = new Thickness(1), Child = _section };
             Grid.SetRow(secGroup, 1);
             grid.Children.Add(secGroup);
