@@ -485,7 +485,15 @@ namespace SlabRebar
             var all = AllHookTypes(doc);
             string match = MatchName(all.Select(h => h.Name), name);
             if (match == null)
+            {
+                // Puede que el nombre exista pero sea un gancho de estribo/tirante: Revit no lo admite
+                // en barras de estilo Estandar (falla con "internal error" al crear la barra), asi que se avisa claro.
+                var any = new FilteredElementCollector(doc).OfClass(typeof(RebarHookType)).Cast<RebarHookType>().ToList();
+                string other = MatchName(any.Select(h => h.Name), name);
+                if (other != null)
+                    throw new InvalidOperationException("el tipo de gancho \"" + other + "\" es de estilo Estribo/Tirante y Revit no lo admite en barras longitudinales de losa (estilo Estandar); elige un gancho de estilo Estandar (p. ej. \"Estandar - 90\") o deja el gancho vacio");
                 throw new InvalidOperationException("el tipo de gancho \"" + name + "\" no existe en este proyecto; elige uno de los cargados en la ventana o deja el gancho vacio");
+            }
             return all.First(h => h.Name == match).Id;
         }
 
@@ -506,8 +514,20 @@ namespace SlabRebar
             new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).Cast<RebarBarType>()
                 .OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
+        /// <summary>
+        /// Tipos de gancho de estilo Estandar, los unicos que Revit admite en las barras de losa
+        /// (todas se crean con RebarStyle.Standard). Los de estilo Estribo/Tirante se excluyen:
+        /// si se asignan a una barra Estandar, Revit falla al crearla ("An internal error has occurred").
+        /// </summary>
         public static List<RebarHookType> AllHookTypes(Document doc) =>
             new FilteredElementCollector(doc).OfClass(typeof(RebarHookType)).Cast<RebarHookType>()
+                .Where(IsStandardHook)
                 .OrderBy(h => h.Name, StringComparer.OrdinalIgnoreCase).ToList();
+
+        /// <summary>True si el gancho es de estilo Estandar (si la API no lo dice, se admite).</summary>
+        public static bool IsStandardHook(RebarHookType h)
+        {
+            try { return h.Style == RebarStyle.Standard; } catch { return true; }
+        }
     }
 }

@@ -74,7 +74,9 @@ hormigón, así la barra guarda el recubrimiento con los bordes paralelos a ella
   opuesto y solo se avisa: la losa se arma igualmente y únicamente se rechaza si el gancho
   llegara a salirse del hormigón (lo detecta la comprobación de la geometría real). Para
   ganchos más cortos: reducir la longitud de gancho del tipo de barra o usar otro tipo de
-  gancho.
+  gancho **de estilo Estándar**. Los ganchos de estilo *Estribo/Tirante* no se ofrecen en
+  la ventana: todas las barras de losa son de estilo Estándar y Revit no admite en ellas un
+  gancho de estribo (falla al crear la barra con "internal error").
 - Las barras iguales y equiespaciadas se crean como **un solo conjunto de Revit (array)**,
   igual que si se modelaran a mano (la fila de barras inferiores de un paño rectangular es
   un conjunto; si hay dos barras por vigueta, dos conjuntos entrelazados).
