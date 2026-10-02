@@ -121,12 +121,6 @@ namespace SlabRebar
         public bool HookStart, HookEnd;
         /// <summary>Longitud total del gancho (pies) segun el tipo de barra; 0 si no lleva o no se conoce.</summary>
         public double HookLength;
-        /// <summary>
-        /// Franjas (coordenada a lo largo del eje) en que la barra cruza la viga que separa dos
-        /// panos: ahi va dentro del hormigon de la viga, no de la losa, asi que no se comprueban
-        /// contra ella (como la prolongacion). Vacio salvo en el acero corrido entre panos.
-        /// </summary>
-        public List<(double a, double b)> Gaps = new List<(double a, double b)>();
         public double Length => End - Start;
         public bool ExtendsStart => Start < InA - 1e-9;
         public bool ExtendsEnd => End > InB + 1e-9;
@@ -136,15 +130,7 @@ namespace SlabRebar
             Layer == o.Layer && AlongU == o.AlongU && Math.Abs(Z - o.Z) <= tol && Math.Abs(D - o.D) <= 1e-9 &&
             Math.Abs(Start - o.Start) <= tol && Math.Abs(End - o.End) <= tol &&
             Math.Abs(InA - o.InA) <= tol && Math.Abs(InB - o.InB) <= tol &&
-            HookStart == o.HookStart && HookEnd == o.HookEnd && SameGaps(o, tol);
-
-        private bool SameGaps(PlannedBar o, double tol)
-        {
-            if (Gaps.Count != o.Gaps.Count) return false;
-            for (int i = 0; i < Gaps.Count; i++)
-                if (Math.Abs(Gaps[i].a - o.Gaps[i].a) > tol || Math.Abs(Gaps[i].b - o.Gaps[i].b) > tol) return false;
-            return true;
-        }
+            HookStart == o.HookStart && HookEnd == o.HookEnd;
     }
 
     /// <summary>Barras iguales y equiespaciadas: un conjunto (array) de Revit.</summary>
@@ -198,8 +184,6 @@ namespace SlabRebar
 
         private double _tol, _minLen;
         private PlanDiameters _d;
-        /// <summary>Anchura maxima (mm) de la franja entre dos panos que el acero corrido cruza: la viga que los separa.</summary>
-        public const double MaxPanelGapMm = 1000;
 
         public int CountOf(BarLayer l) => Bars.Count(b => b.Layer == l);
         public int GroupsOf(BarLayer l) => Groups.Count(g => g.Layer == l);
@@ -341,11 +325,10 @@ namespace SlabRebar
                     Warnings.Add("el acero de temperatura no respeta el recubrimiento superior");
                 double z = FitHook(BarLayer.Temperature, zte, dte, Hooked(a.Temperature), Thickness - MinCover(dte) - 0.5 * dte);
                 LayerZ[BarLayer.Temperature] = z;
-                // acero corrido: una recta que cruza varios panos da una sola barra que pasa por encima de las vigas que los separan
                 double from = Outline.UMin + CoverEdge + 0.5 * dte, to = Outline.UMax - CoverEdge - 0.5 * dte;
                 foreach (double u in Geometry2D.Positions(from, to, Mm(a.Temperature.SpacingMm), _tol))
-                    foreach ((Span s, List<(double a, double b)> gaps) in JoinPanels(Outline.Cut(false, u, CoverEdge + 0.5 * dte, _tol), false, u))
-                        Add(MakeBar(BarLayer.Temperature, false, u, z, dte, s, Mm(a.Temperature.ExtensionMm), Hooked(a.Temperature), gaps));
+                    foreach (Span s in Outline.Cut(false, u, CoverEdge + 0.5 * dte, _tol))
+                        Add(MakeBar(BarLayer.Temperature, false, u, z, dte, s, Mm(a.Temperature.ExtensionMm), Hooked(a.Temperature)));
             }
         }
 
@@ -463,44 +446,6 @@ namespace SlabRebar
         }
 
         /// <summary>
-        /// Tramos de una recta unidos a traves de las vigas que separan los panos: dos tramos
-        /// consecutivos con extremos exteriores (no de hueco), en panos distintos y separados
-        /// como mucho MaxPanelGapMm se funden en uno, y la franja entre ellos se anota como
-        /// paso por la viga (no se comprueba contra la losa). Asi el acero corrido pasa de un
-        /// pano al siguiente en vez de partirse en cada viga.
-        /// </summary>
-        private List<(Span span, List<(double a, double b)> gaps)> JoinPanels(List<Span> spans, bool alongU, double coord)
-        {
-            var result = new List<(Span, List<(double a, double b)>)>();
-            var gaps = new List<(double a, double b)>();
-            Span cur = default;
-            bool has = false;
-            double eps = Math.Max(_tol, Mm(1));
-            foreach (Span s in spans)
-            {
-                if (has && Outline.Outers.Count > 1 && !cur.HoleB && !s.HoleA && s.A - cur.B <= Mm(MaxPanelGapMm) + _tol &&
-                    DifferentPanels(alongU, coord, cur.B - eps, s.A + eps))
-                {
-                    if (s.A - cur.B > _tol) gaps.Add((cur.B, s.A));
-                    cur = new Span(cur.A, s.B, cur.HoleA, s.HoleB);
-                    continue;
-                }
-                if (has) result.Add((cur, gaps));
-                cur = s; gaps = new List<(double a, double b)>(); has = true;
-            }
-            if (has) result.Add((cur, gaps));
-            return result;
-        }
-
-        /// <summary>True si los dos puntos de la recta (coordenadas a lo largo de ella) caen en panos distintos.</summary>
-        private bool DifferentPanels(bool alongU, double coord, double t1, double t2)
-        {
-            int p1 = Outline.PanelAt(alongU ? new Pt(t1, coord) : new Pt(coord, t1));
-            int p2 = Outline.PanelAt(alongU ? new Pt(t2, coord) : new Pt(coord, t2));
-            return p1 >= 0 && p2 >= 0 && p1 != p2;
-        }
-
-        /// <summary>
         /// Extremo del tramo recto de la barra en el borde de un tramo: en un hueco, al
         /// recubrimiento; en el borde exterior, prolongado "ext" hacia la viga si se da
         /// prolongacion y si no al recubrimiento. Si ese extremo lleva gancho y para dentro de
@@ -524,15 +469,14 @@ namespace SlabRebar
         }
 
         /// <summary>Barra corrida en todo el tramo (null si queda demasiado corta).</summary>
-        private PlannedBar MakeBar(BarLayer layer, bool alongU, double coord, double z, double d, Span s, double ext, bool hook, List<(double a, double b)> gaps = null) =>
-            MakeBar(layer, alongU, coord, z, d, s, StartOf(s, ext, layer, d, hook), EndOf(s, ext, layer, d, hook), ext, hook, gaps);
+        private PlannedBar MakeBar(BarLayer layer, bool alongU, double coord, double z, double d, Span s, double ext, bool hook) =>
+            MakeBar(layer, alongU, coord, z, d, s, StartOf(s, ext, layer, d, hook), EndOf(s, ext, layer, d, hook), ext, hook);
 
         /// <summary>
         /// Barra de start a end dentro del tramo s. Lleva gancho en cada extremo exterior (no de
         /// hueco) al que llega, tanto si para dentro de la losa como si se prolonga hacia la viga.
         /// </summary>
-        private PlannedBar MakeBar(BarLayer layer, bool alongU, double coord, double z, double d, Span s, double start, double end, double ext, bool hook,
-                                   List<(double a, double b)> gaps = null)
+        private PlannedBar MakeBar(BarLayer layer, bool alongU, double coord, double z, double d, Span s, double start, double end, double ext, bool hook)
         {
             if (end - start < Math.Max(_minLen, _tol)) { Skipped++; return null; }
             var b = new PlannedBar
@@ -540,8 +484,7 @@ namespace SlabRebar
                 Layer = layer, AlongU = alongU, Coord = coord, Z = z, D = d, Start = start, End = end,
                 InA = Math.Max(start, s.A), InB = Math.Min(end, s.B),
                 HookStart = hook && !s.HoleA && start <= StartOf(s, ext, layer, d, true) + _tol,
-                HookEnd = hook && !s.HoleB && end >= EndOf(s, ext, layer, d, true) - _tol,
-                Gaps = gaps ?? new List<(double a, double b)>()
+                HookEnd = hook && !s.HoleB && end >= EndOf(s, ext, layer, d, true) - _tol
             };
             if (b.HookStart || b.HookEnd) b.HookLength = HookOf(layer, d).Length;
             return b;

@@ -332,26 +332,10 @@ namespace SlabRebar.Tests
             Check(p.Joists.Count >= 19 && p.Joists.Count <= 21, "viguetas repartidas en 8.3 m (" + p.Joists.Count + ")");
             int inGap = p.Bars.Count(b => b.Layer == BarLayer.JoistBottom && b.Coord > Mm(4000) && b.Coord < Mm(4300));
             Check(inGap == 0, "ninguna barra inferior en la franja de la viga (" + inGap + ")");
-            // la temperatura es acero corrido: una sola barra que pasa por encima de la viga entre los dos panos
             PlannedBar te = p.Bars.Where(b => b.Layer == BarLayer.Temperature).OrderBy(b => b.Start).First();
-            Near(te.Start, 25, "temperatura corrida empieza al recubrimiento del pano 1");
-            Near(te.End, 8275, "y termina al recubrimiento del pano 2");
-            Check(te.Gaps.Count == 1, "cruza una viga (" + te.Gaps.Count + ")");
-            if (te.Gaps.Count == 1) { Near(te.Gaps[0].a, 4000, "la franja de la viga empieza al borde del pano 1"); Near(te.Gaps[0].b, 4300, "y acaba al borde del pano 2"); }
-            Check(p.Bars.Where(b => b.Layer == BarLayer.Temperature && b.Coord < Mm(1000) - 1e-6 || b.Layer == BarLayer.Temperature && b.Coord > Mm(1500) + 1e-6).All(b => b.Gaps.Count == 1),
-                  "fuera del hueco, toda la temperatura es corrida");
-            Check(p.Bars.Where(b => b.Layer == BarLayer.Temperature && b.Coord > Mm(1000) + 1e-6 && b.Coord < Mm(1500) - 1e-6).Count() >= 2,
-                  "en la franja del hueco la temperatura se parte en el hueco, no en la viga");
-            Check(p.GroupsOf(BarLayer.Temperature) <= 4, "la temperatura corrida se agrupa en pocos conjuntos (" + p.GroupsOf(BarLayer.Temperature) + ")");
-            Check(p.Bars.All(b => Pieces(b).All(t => o.Contains(new Pt(b.AlongU ? t : b.Coord, b.AlongU ? b.Coord : t)))), "todos los tramos comprobables dentro de algun pano");
-        }
-
-        /// <summary>Punto medio de cada tramo comprobable de la barra (entre las franjas de viga entre panos).</summary>
-        private static IEnumerable<double> Pieces(PlannedBar b)
-        {
-            double from = b.InA;
-            foreach ((double a, double g) in b.Gaps) { yield return 0.5 * (from + a); from = g; }
-            yield return 0.5 * (from + b.InB);
+            Near(te.End, 3975, "temperatura del pano 1 para al recubrimiento del borde del pano");
+            Check(p.Bars.Where(b => b.Layer == BarLayer.Temperature).Any(b => Math.Abs(b.Start - Mm(4325)) < 1e-6), "temperatura del pano 2 empieza al recubrimiento");
+            Check(p.Bars.All(b => o.Contains(new Pt(b.AlongU ? 0.5 * (b.InA + b.InB) : b.Coord, b.AlongU ? b.Coord : 0.5 * (b.InA + b.InB)))), "todas las barras dentro de algun pano");
         }
 
         private static void LShape()

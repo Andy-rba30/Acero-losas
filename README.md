@@ -75,11 +75,6 @@ hormigón, así la barra guarda el recubrimiento con los bordes paralelos a ella
   llegara a salirse del hormigón (lo detecta la comprobación de la geometría real). Para
   ganchos más cortos: reducir la longitud de gancho del tipo de barra o usar otro tipo de
   gancho.
-- Con un suelo de **varios paños separados por vigas**, el acero de temperatura es
-  **corrido**: una recta que cruza varios paños da una sola barra que pasa por encima de las
-  vigas que los separan (franjas de hasta 1 m), en vez de partirse en cada viga. La franja
-  sobre la viga no se comprueba contra la losa (como la prolongación). En los huecos sí se
-  parte.
 - Las barras iguales y equiespaciadas se crean como **un solo conjunto de Revit (array)**,
   igual que si se modelaran a mano (la fila de barras inferiores de un paño rectangular es
   un conjunto; si hay dos barras por vigueta, dos conjuntos entrelazados).
@@ -163,7 +158,8 @@ qué se ha rechazado lo que no.
   encajar. Al pasar el ratón por una barra se ve su capa, diámetro, posición y longitud.
 - **Sección transversal** a media luz: espesor, ladrillos y viguetas con la losa superior,
   cada barra que cruza el corte como un círculo (las que no cruzan, como los bastones de
-  apoyo, en hueco) y el acero perpendicular como una raya a su cota. Acotaciones: línea de
+  apoyo, en hueco) y el acero perpendicular como una raya a su cota (con varios paños, un
+  tramo por paño). Acotaciones: línea de
   cota del espesor (y de la losa superior y el ladrillo en la aligerada) y, junto a cada
   capa, su nombre, diámetro y cota desde la cara inferior, siempre en la zona visible. Como
   la losa es muy ancha respecto a su espesor, al encajar se ven unas tres viguetas

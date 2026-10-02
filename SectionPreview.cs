@@ -206,7 +206,7 @@ namespace SlabRebar
             }
 
             // acero perpendicular (a lo largo de v): la recta mas cercana al corte de cada capa, como una raya
-            // a su cota. Con varios panos la temperatura corrida es una sola barra; con huecos esta partida: se dibujan todos los tramos.
+            // a su cota. Con varios panos (o huecos) esa recta esta partida en un tramo por pano: se dibujan todos.
             foreach (var layer in _plan.Bars.Where(b => !b.AlongU).GroupBy(b => b.Layer))
             {
                 double coord = layer.OrderBy(x => Math.Abs(x.Coord - uCut)).First().Coord;
