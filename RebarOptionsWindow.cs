@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Arba.Comun;
 
 namespace SlabRebar
 {
@@ -56,7 +57,7 @@ namespace SlabRebar
         // general
         private TextBox _coverB, _coverT, _coverE, _partition;
         private CheckBox _beams;
-        private TextBlock _message, _partitionPreview, _previewCaption;
+        private TextBlock _message, _partitionPreview, _partitionWarning, _previewCaption;
         private Button _buildButton;
         private PlanPreview _plan;
         private SectionPreview _section;
@@ -463,9 +464,16 @@ namespace SlabRebar
                    "lados (L/4) y en las de borde el baston extremo sale de su cara. Su hormigon tambien cuenta como valido al comprobar las barras. " +
                    "Sin la casilla, los unicos apoyos son los extremos de la losa.");
             _partition = new TextBox { Text = _cfg.PartitionTemplate, Margin = Pad };
-            AddRow(grid, r++, "Particion:", _partition, "Plantilla del parametro Particion de cada barra. Comodines: " + PartitionName.Help);
+            AddRow(grid, r++, "Particion:", _partition,
+                   "Plantilla del parametro Particion de cada conjunto. Por el contrato ARBA-comun " + ArbaContract.Version +
+                   " tiene que empezar por \"{categoria} - {prefijo}-\" (aqui " + ArbaContract.CatLosas + " - " + ArbaContract.Losas.Prefix +
+                   "-): asi las tablas del plugin de metrados agrupan el acero por elemento. La capa no hace falta en la particion: " +
+                   "cada conjunto lleva ademas \"" + ArbaContract.Origen.Name + "\" = " + ArbaContract.Losas.Origin + " y \"" +
+                   ArbaContract.Codigo.Name + "\" = inferior / baston / temperatura... Comodines: " + PartitionName.Help);
             _partitionPreview = new TextBlock { Foreground = RevitTheme.Muted, Margin = Pad, TextWrapping = TextWrapping.Wrap };
             AddRow(grid, r++, "", _partitionPreview, null);
+            _partitionWarning = new TextBlock { Foreground = RevitTheme.Error, Margin = Pad, TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+            AddRow(grid, r++, "", _partitionWarning, null);
             group.Content = grid;
             return group;
         }
@@ -519,6 +527,20 @@ namespace SlabRebar
             _message = new TextBlock { Foreground = RevitTheme.Error, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             DockPanel.SetDock(buttons, Dock.Right);
+
+            // version del contrato comun con la que se compilo (CONTRATO.md §4)
+            var contract = new TextBlock
+            {
+                Text = "Contrato ARBA-comun " + ArbaContract.Version,
+                Foreground = RevitTheme.Hint,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 12, 0),
+                ToolTip = "Version del contrato ARBA-comun (parametros compartidos, particion y cinta) con la que se compilo este add-in. " +
+                          "Particion " + ArbaPartition.FilterPrefix(ArbaContract.CatLosas, ArbaContract.Losas.Prefix) + "marca; " +
+                          ArbaContract.Origen.Name + " = " + ArbaContract.Losas.Origin + "."
+            };
+            DockPanel.SetDock(contract, Dock.Left);
+            panel.Children.Add(contract);
 
             var save = new Button { Content = "Guardar como valores por defecto", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(4, 0, 4, 0) };
             save.ToolTip = "Guarda lo elegido en config.json (" + AppConfig.ConfigPath() + ") para las proximas veces.";
@@ -821,7 +843,8 @@ namespace SlabRebar
                                        (allChosen ? "" : "  (hay capas sin tipo de barra elegido: diametros orientativos)");
                 if (plan != null) { _plan.Show(frame, plan); _section.Show(frame, plan); }
                 else { _plan.Clear(text); _section.Clear(text); }
-                _partitionPreview.Text = "Ejemplo: " + _selected.Partition(scratch, "inferior de vigueta", "inferior");
+                _partitionPreview.Text = "Ejemplo: " + _selected.Partition(scratch, "inferior de vigueta", "inferior") +
+                                         "   (" + ArbaContract.Origen.Name + " = " + ArbaContract.Losas.Origin + ", " + ArbaContract.Codigo.Name + " = inferior)";
             }
             else
             {
@@ -830,6 +853,14 @@ namespace SlabRebar
                 _section.Clear("");
                 _partitionPreview.Text = "";
             }
+
+            // aviso del contrato: la plantilla tiene que empezar por "{categoria} - {prefijo}-"
+            bool followsContract = ArbaPartition.TemplateFollowsContract(scratch.PartitionTemplate);
+            _partitionWarning.Text = followsContract ? "" :
+                "La plantilla no sigue el contrato ARBA-comun " + ArbaContract.Version + ": tiene que empezar por \"{categoria} - {prefijo}-\" " +
+                "(por defecto \"" + AppConfig.DefaultPartitionTemplate + "\" -> " + ArbaContract.CatLosas + " - " + ArbaContract.Losas.Prefix +
+                "-L2). Con otra forma las tablas del plugin de metrados no agruparan este acero por losa.";
+            _partitionWarning.Visibility = followsContract ? Visibility.Collapsed : Visibility.Visible;
 
             if (error != null) { _message.Foreground = RevitTheme.Error; _message.Text = error; }
             else if (_message.Foreground == RevitTheme.Error) _message.Text = "";

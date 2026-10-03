@@ -125,11 +125,20 @@ namespace SlabRebar
         public bool DetectBeams { get; set; } = true;
 
         /// <summary>
-        /// Plantilla del parametro Particion de cada barra. Comodines: {marca} (Marca del
-        /// elemento; si esta vacia se usa el Id), {id}, {tipo}, {familia}, {conjunto}
-        /// (nombre del juego de barras) y {capa} (inferior, baston, temperatura...).
+        /// Plantilla por defecto del parametro Particion, segun el contrato ARBA-comun:
+        /// "LOSAS - LOS-L2" (categoria del anfitrion, prefijo del add-in y marca; la capa no va en la
+        /// particion sino en "ARBA - Codigo"). Una plantilla que no empiece por "{categoria} - {prefijo}-"
+        /// incumple el contrato y la ventana lo avisa.
         /// </summary>
-        public string PartitionTemplate { get; set; } = "LOSA-{marca}";
+        public const string DefaultPartitionTemplate = "{categoria} - {prefijo}-{marca}";
+
+        /// <summary>
+        /// Plantilla del parametro Particion de cada barra. Comodines: {categoria} (LOSAS, segun el
+        /// anfitrion), {prefijo} (LOS), {marca} (Marca del elemento; si esta vacia se usa el Id), {id},
+        /// {codigo} o {capa} (inferior, baston, temperatura...), {tipo}, {familia} y {conjunto}
+        /// (nombre del juego de barras).
+        /// </summary>
+        public string PartitionTemplate { get; set; } = DefaultPartitionTemplate;
 
         /// <summary>Tolerancia geometrica al agrupar coordenadas y comparar (mm).</summary>
         public double ToleranceMm { get; set; } = 2;
@@ -190,7 +199,7 @@ namespace SlabRebar
             if (CoverEdgeMm < 0) CoverEdgeMm = 0;
             if (ToleranceMm <= 0) ToleranceMm = 2;
             if (MinBarLengthMm < 0) MinBarLengthMm = 0;
-            if (string.IsNullOrWhiteSpace(PartitionTemplate)) PartitionTemplate = "LOSA-{marca}";
+            if (string.IsNullOrWhiteSpace(PartitionTemplate)) PartitionTemplate = DefaultPartitionTemplate;
         }
 
         /// <summary>"short", "long", "x", "y" o "angle"; cualquier otra cosa es "short".</summary>

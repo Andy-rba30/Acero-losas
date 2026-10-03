@@ -8,12 +8,15 @@ propio add-in al arrancar Revit.
 
 ## Origen
 
-- Repositorio: https://github.com/Andy-rba30/Acero-losas, rama `claude/brave-allen-3gowqo`
-  (o `main` cuando se fusione).
+- Repositorio: https://github.com/Andy-rba30/Acero-losas, rama `main`. Clonar con
+  `git clone --recurse-submodules` (o `git submodule update --init` en un clon ya hecho): el
+  código común ARBA va en el submódulo `external/ARBA-comun` (etiqueta `v1.0.0`) y sin él el
+  proyecto no compila.
 - Proyecto: `SlabRebar.csproj` (.NET 10, `net10.0-windows`, x64). Compilar con
   `dotnet build -c Release`. La salida está en `bin\Release\net10.0-windows\`.
 - No tiene dependencias aparte de las DLL de Revit (los paquetes `Nice3point.Revit.Api.*`
-  son solo de compilación, no se copian). No hace falta copiar nada de `bin` salvo
+  son solo de compilación, no se copian). El código común de ARBA-comun se compila **dentro**
+  de `SlabRebar.dll` (nunca es una DLL aparte). No hace falta copiar nada de `bin` salvo
   `SlabRebar.dll` (y `SlabRebar.pdb` si quieres depurar).
 
 ## Archivos a instalar (por usuario, `%AppData%\Autodesk\Revit\Addins\2027\`)
@@ -37,11 +40,18 @@ DLL. `config.json` tiene que quedar siempre en la misma carpeta que `SlabRebar.d
 ## Dónde aparece en Revit
 
 Pestaña **ARBA** > panel **Acero** > desplegable **Acero** > botón **Losas**, junto a
-**Columnas** y **Muros**. Los tres add-ins llevan la misma clase `ArbaRibbon`: cada uno
-crea la pestaña ARBA y los paneles IA / Acero / Encofrado si no existen (en ese orden) y
-añade su botón al desplegable "Acero" del panel "Acero", así que da igual cuál cargue
-primero y basta con instalar los archivos. Si se desinstala Losas, solo hay que borrar
-`SlabRebar.addin` y la carpeta `SlabRebar\`; el desplegable sigue con los demás botones.
+**Zapatas**, **Cimientos**, **Bloques**, **Vigas**, **Columnas** y **Muro de contencion**.
+Todos los add-ins ARBA llevan la misma clase `ArbaRibbon` (de ARBA-comun, compilada en cada
+ensamblado): cada uno crea la pestaña ARBA y los paneles IA / Acero / Metrados / Encofrado si
+no existen (en ese orden) y añade su botón al desplegable "Acero" del panel "Acero", así que
+da igual cuál cargue primero y basta con instalar los archivos. Si se desinstala Losas, solo
+hay que borrar `SlabRebar.addin` y la carpeta `SlabRebar\`; el desplegable sigue con los
+demás botones.
+
+El add-in no necesita ningún archivo de parámetros compartidos: los del contrato
+(`ARBA - Origen`, `ARBA - Código`, `Metrado - Elemento`, con GUID fijo) los crea y vincula en
+el proyecto la primera vez que arma, desde un archivo temporal, y deja el archivo de
+parámetros compartidos del usuario como estaba.
 
 ## Comprobación tras instalar
 
@@ -50,7 +60,11 @@ primero y basta con instalar los archivos. Si se desinstala Losas, solo hay que 
    (sección de losa con ladrillos). También aparece en Complementos > Herramientas
    externas > "Armar losa".
 3. Seleccionar un suelo estructural de hormigón y pulsar Losas: se abre la ventana
-   "Armar losas" con el tema oscuro de Revit.
+   "Armar losas" con el tema oscuro de Revit; en el pie pone "Contrato ARBA-comun 1.0.0".
+4. Armar una losa con Marca `L2`: cada conjunto creado tiene Partición `LOSAS - LOS-L2`,
+   `ARBA - Origen` = `LOSAS`, `ARBA - Código` = `inferior` / `baston` / `temperatura` (o
+   `inferior-sec`, `superior`, `superior-sec` en una maciza) y `Metrado - Elemento` = `LOSAS`.
+   Volver a armarla pregunta "borrar y rearmar / conservar".
 
 ## Desinstalación
 

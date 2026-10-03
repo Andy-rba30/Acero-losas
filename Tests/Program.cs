@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Arba.Comun;
 
 namespace SlabRebar.Tests
 {
@@ -410,12 +411,42 @@ namespace SlabRebar.Tests
             Check(c.CoverTopMm != 99, "Clone es independiente");
             System.IO.File.Delete(tmp);
 
-            string s = PartitionName.Expand("LOSA-{marca}-{capa}", new PartitionName.Source { Mark = "L-2", Layer = "baston" });
+            // plantilla de particion (PartitionName comun de ARBA-comun; {capa} es alias de {codigo})
+            string s = PartitionName.Expand("LOSA-{marca}-{capa}", new PartitionName.Source { Mark = "L-2", Code = "baston" });
             Check(s == "LOSA-L-2-baston", "particion con marca y capa: " + s);
             s = PartitionName.Expand("LOSA-{marca}", new PartitionName.Source { Mark = "", Id = "1234" });
             Check(s == "LOSA-1234", "particion sin marca usa el id: " + s);
             s = PartitionName.Expand("LOSA-{conjunto}", new PartitionName.Source());
             Check(s == "LOSA", "comodin vacio sin separador huerfano: " + s);
+
+            // contrato ARBA-comun: "LOSAS - LOS-marca", la capa va en ARBA - Codigo
+            Check(ArbaContract.Losas.Prefix == "LOS" && ArbaContract.Losas.Origin == "LOSAS", "prefijo LOS y origen LOSAS en el contrato");
+            Check(ArbaContract.Losas.Legacy.Contains("LOSA"), "LOSA es el prefijo antiguo de losas");
+            Check(ArbaPartition.Build("LOSAS", "LOS", "L-2", "1") == "LOSAS - LOS-L-2", "particion del contrato: " + ArbaPartition.Build("LOSAS", "LOS", "L-2", "1"));
+            Check(ArbaPartition.Build("LOSAS", "LOS", "", "1234") == "LOSAS - LOS-1234", "particion del contrato sin marca usa el id");
+            Check(AppConfig.DefaultPartitionTemplate == "{categoria} - {prefijo}-{marca}", "plantilla por defecto del add-in: " + AppConfig.DefaultPartitionTemplate);
+            Check(new AppConfig().PartitionTemplate == AppConfig.DefaultPartitionTemplate, "AppConfig arranca con la plantilla del contrato");
+            Check(ArbaPartition.TemplateFollowsContract(AppConfig.DefaultPartitionTemplate), "la plantilla por defecto cumple el contrato");
+            Check(!ArbaPartition.TemplateFollowsContract("LOSA-{marca}"), "la plantilla antigua LOSA-{marca} no cumple el contrato");
+            var blank = new AppConfig { PartitionTemplate = "  " };
+            blank.Normalize();
+            Check(blank.PartitionTemplate == AppConfig.DefaultPartitionTemplate, "Normalize repone la plantilla del contrato si esta vacia");
+            s = ArbaPartition.Build(AppConfig.DefaultPartitionTemplate, new PartitionName.Source { Category = "LOSAS", Prefix = "LOS", Mark = "L2", Code = "inferior", SetName = "inferior de vigueta" });
+            Check(s == "LOSAS - LOS-L2", "con la plantilla por defecto la capa no entra en la particion: " + s);
+            s = ArbaPartition.Build("{categoria} - {prefijo}-{marca}-{capa}", new PartitionName.Source { Category = "LOSAS", Prefix = "LOS", Mark = "L2", Code = "temperatura" });
+            Check(s == "LOSAS - LOS-L2-temperatura", "plantilla con {capa}: " + s);
+            ArbaPartitionInfo info = ArbaPartition.Parse("LOSA-L1");
+            Check(info.Kind == ArbaPartitionKind.Legacy && info.Prefix == "LOS" && info.Mark == "L1", "LOSA-L1 se lee como particion antigua de losas: " + info);
+            Check(ArbaPartition.Upgrade(info, "LOSAS") == "LOSAS - LOS-L1", "LOSA-L1 migra a LOSAS - LOS-L1");
+            info = ArbaPartition.Parse("LOSAS - LOS-L2-baston");
+            Check(info.Kind == ArbaPartitionKind.Contract && info.Category == "LOSAS" && info.Mark == "L2" && info.Code == "baston", "particion del contrato con codigo: " + info);
+
+            // regla de nombres de tipo (NameMatch.First = la MatchName de siempre)
+            var names = new[] { "Ø3/8\"", "Ø1/2\"", "Ø5/8\"" };
+            Check(NameMatch.First(names, "ø1/2\"") == "Ø1/2\"", "nombre exacto sin distinguir mayusculas");
+            Check(NameMatch.First(names, "5/8") == "Ø5/8\"", "fragmento");
+            Check(NameMatch.First(names, "3/4") == null, "sin coincidencia no se sustituye por otro");
+            Check(NameMatch.First(names, "") == null, "nombre vacio");
         }
     }
 }

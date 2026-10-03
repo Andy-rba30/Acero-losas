@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Arba.Comun;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Structure;
 
@@ -250,7 +251,7 @@ namespace SlabRebar
                 if (array) rb.GetShapeDrivenAccessor().SetLayoutAsFixedNumber(g.Count, (g.Count - 1) * g.Spacing, true, true, true);
                 else rb.GetShapeDrivenAccessor().SetLayoutAsSingle();
 
-                Finish(c.Doc, rb, c.Item.Partition(c.Cfg, SetName(b), Layers.Short(b.Layer)));
+                Finish(c.Doc, rb, c.Item.Host, c.Item.Partition(c.Cfg, SetName(b), Layers.Short(b.Layer)), Layers.Short(b.Layer));
                 c.Result.Created.Add(new CreatedSet { Id = rb.Id, Name = name, Radius = r, AlongU = b.AlongU, InA = b.InA, InB = b.InB, CheckA = checkA, CheckB = checkB });
                 c.Result.Bars += g.Count;
                 c.Result.ByLayer[b.Layer] = (c.Result.ByLayer.TryGetValue(b.Layer, out int prev) ? prev : 0) + g.Count;
@@ -455,15 +456,16 @@ namespace SlabRebar
             }
         }
 
-        private static void Finish(Document doc, Rebar r, string partition)
+        /// <summary>
+        /// Marca el conjunto recien creado segun el contrato ARBA-comun: Particion ("LOSAS - LOS-L2"),
+        /// "ARBA - Origen" = LOSAS, "ARBA - Codigo" = capa (inferior, baston, temperatura...) y
+        /// "Metrado - Elemento" = categoria del anfitrion. Los parametros compartidos los asegura el
+        /// comando al abrir la transaccion (ArbaSharedParams.Ensure).
+        /// </summary>
+        private static void Finish(Document doc, Rebar r, Element host, string partition, string code)
         {
-            if (!string.IsNullOrEmpty(partition))
-            {
-                Parameter p = null;
-                try { p = r.get_Parameter(BuiltInParameter.NUMBER_PARTITION_PARAM); } catch { }
-                if (p == null) p = r.LookupParameter("Partition") ?? r.LookupParameter("Particion") ?? r.LookupParameter("Partición");
-                if (p != null && !p.IsReadOnly) { try { p.Set(partition); } catch { } }
-            }
+            try { ArbaPartition.Write(r, partition); } catch { }
+            try { ArbaOrigin.WriteFor(r, host, ArbaContract.Losas, code); } catch { }
             try { r.SetUnobscuredInView(doc.ActiveView, true); } catch { }
         }
 
@@ -500,15 +502,9 @@ namespace SlabRebar
         /// <summary>
         /// Nombre que corresponde a "name": coincidencia exacta, si no parcial (sin distinguir
         /// mayusculas); null si no hay ninguna. Nunca se sustituye por otro: sin coincidencia no se arma.
+        /// Es la regla comun <see cref="NameMatch.First"/> de ARBA-comun (la misma de siempre en este add-in).
         /// </summary>
-        public static string MatchName(IEnumerable<string> names, string name)
-        {
-            if (string.IsNullOrWhiteSpace(name)) return null;
-            var list = names.ToList();
-            string exact = list.FirstOrDefault(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase));
-            if (exact != null) return exact;
-            return list.FirstOrDefault(n => n.IndexOf(name, StringComparison.OrdinalIgnoreCase) >= 0);
-        }
+        public static string MatchName(IEnumerable<string> names, string name) => NameMatch.First(names, name);
 
         public static List<RebarBarType> AllBarTypes(Document doc) =>
             new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).Cast<RebarBarType>()

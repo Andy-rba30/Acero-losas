@@ -18,6 +18,12 @@ del sólido, ventana previa con esquemas y tema oscuro de Revit, red de segurida
 deshace el elemento entero si una barra queda fuera del hormigón, `config.json`) y el
 mismo botón en la pestaña **ARBA** > panel **Acero** > desplegable **Acero** > **Losas**.
 
+Comparte con todos los add-ins ARBA el código común de
+[ARBA-comun](https://github.com/Andy-rba30/ARBA-comun) (contrato **1.0.0**, submódulo
+`external/ARBA-comun`): la cinta, el tema oscuro, la plantilla de partición, los parámetros
+compartidos `ARBA - Origen` / `ARBA - Código` / `Metrado - Elemento`, y las reglas de borrar y
+rearmar y de migración de modelos antiguos (ver [Contrato ARBA-comun](#contrato-arba-comun)).
+
 Antes de crear nada abre una **ventana** en la que se ve qué se ha detectado en cada losa
 seleccionada y se elige el armado: tipo de losa y dirección (general y por losa), viguetas,
 tipos de barra, separaciones, bastones, temperatura y recubrimientos, con un esquema en
@@ -151,8 +157,11 @@ qué se ha rechazado lo que no.
 - **Losa maciza**: malla inferior (principal y secundaria) y malla superior (principal con
   bastones / corrida / ninguna y secundaria).
 - **Recubrimientos, apoyos y partición**: recubrimiento inferior, superior y de bordes;
-  usar las vigas como apoyos; plantilla del parámetro Partición (`{marca}`, `{id}`,
-  `{tipo}`, `{familia}`, `{conjunto}`, `{capa}`).
+  usar las vigas como apoyos; plantilla del parámetro Partición (`{categoria}`, `{prefijo}`,
+  `{marca}`, `{id}`, `{codigo}` o `{capa}`, `{tipo}`, `{familia}`, `{conjunto}`) con el
+  ejemplo de la losa seleccionada y un aviso en rojo si la plantilla no empieza por
+  `{categoria} - {prefijo}-` como exige el contrato. El pie de la ventana muestra la versión
+  del contrato ARBA-comun con la que se compiló.
 - **Planta**: hormigón con huecos, vigas de apoyo (gris), franjas de las viguetas, cada
   barra a su grosor y con el color de su capa (rojo oscuro inferior, naranja bastones y
   superior principal, morado temperatura e inferior secundaria, azul superior secundaria),
@@ -209,13 +218,40 @@ Armar avisa de qué falta.
     "topSecondary":    { "enabled": false, "barTypeName": "", "spacingMm": 250, "extensionMm": 0 }
   },
   "detectBeams": true,
-  "partitionTemplate": "LOSA-{marca}",
+  "partitionTemplate": "{categoria} - {prefijo}-{marca}",   // LOSAS - LOS-L2 (contrato ARBA-comun)
   "toleranceMm": 2, "minBarLengthMm": 300
 }
 ```
 
 Los nombres de tipo de barra y de gancho pueden ser exactos o un fragmento (`"1/2"`,
 `"90"`); sin coincidencia no se arma, nunca se sustituye por otro tipo.
+
+## Contrato ARBA-comun
+
+El add-in sigue el contrato de [ARBA-comun](https://github.com/Andy-rba30/ARBA-comun)
+(`external/ARBA-comun/CONTRATO.md`, versión **1.0.0**), igual que el resto de add-ins ARBA y el
+plugin de metrados:
+
+- **Partición** de cada conjunto: `LOSAS - LOS-{marca}` (p. ej. `LOSAS - LOS-L2`; sin Marca, el
+  Id de la losa). La categoría `LOSAS` la deduce el común de la categoría del anfitrión (suelos);
+  el prefijo `LOS` identifica a este add-in (antes era `LOSA-{marca}`). La capa **no** va en la
+  partición: así el plugin de metrados agrupa el acero por losa en "Metrado acero - Losas".
+  La plantilla se puede cambiar en `config.json` o en la ventana, pero tiene que empezar por
+  `{categoria} - {prefijo}-` o la ventana lo avisa.
+- **Parámetros compartidos** (de ejemplar, grupo Datos, GUID fijo; el add-in los crea y vincula
+  en el proyecto la primera vez que arma, sin tocar el archivo de parámetros compartidos del
+  usuario): `ARBA - Origen` = `LOSAS`, `ARBA - Código` = capa (`inferior`, `baston`,
+  `temperatura`, `inferior-sec`, `superior`, `superior-sec`) y `Metrado - Elemento` = `LOSAS`.
+- **Borrar y rearmar**: si alguna losa seleccionada ya tiene conjuntos con `ARBA - Origen =
+  LOSAS`, antes de armar pregunta una vez: **borrar la armadura del add-in y rearmar** (solo lo
+  que creó Losas; si la losa se rechaza, su armadura anterior se conserva), **conservar y armar
+  encima** (queda duplicado) o cancelar.
+- **Migración** de modelos anteriores al contrato: las barras con partición `LOSA-…` y sin
+  origen no se reconocen como propias, así que el add-in ofrece **migrarlas** (a `LOSAS -
+  LOS-…`, con `ARBA - Origen`, `ARBA - Código` y `Metrado - Elemento`, sin crear ni borrar
+  barras), bien antes de borrar y rearmar, bien con **Migrar sin rearmar**. El botón "Migrar
+  particiones y origen" para todo el modelo vive en el plugin de metrados.
+- El informe final y el pie de la ventana indican la versión del contrato con la que se compiló.
 
 ## Compilar e instalar
 
@@ -224,14 +260,24 @@ traen las DLL de la API; para Revit 2025/2026 cambia el `TargetFramework` a
 `net8.0-windows` y la versión del paquete).
 
 ```
+git clone --recurse-submodules https://github.com/Andy-rba30/Acero-losas
+# en un clon ya hecho sin el submodulo:
+git submodule update --init
 dotnet build -c Debug
 ```
+
+El código común se compila **como fuente dentro de `SlabRebar.dll`** (clases `internal`,
+namespace `Arba.Comun`) desde el submódulo `external/ARBA-comun` (etiqueta `v1.0.0`), nunca como
+DLL compartida: Revit carga todos los add-ins a la vez y dos versiones de una misma DLL
+chocarían. No se edita nada dentro de `external/ARBA-comun` desde este repo; para subir de
+versión, `git -C external/ARBA-comun checkout vX.Y.Z` y commit del puntero.
 
 En Debug la compilación copia `SlabRebar.dll`, `config.json` y `SlabRebar.addin` a
 `%AppData%\Autodesk\Revit\Addins\2027\`. Al abrir Revit aparece la pestaña **ARBA** con
 el panel **Acero** y el botón **Losas** dentro del desplegable **Acero** (comparte la
-pestaña y el desplegable con los add-ins de columnas y de muros si están instalados) y el
-comando queda también en Complementos > Herramientas externas.
+pestaña, los paneles y el desplegable con todos los add-ins ARBA instalados: zapatas,
+cimientos, bloques, vigas, columnas, muros y el plugin de metrados) y el comando queda también
+en Complementos > Herramientas externas.
 
 El proyecto lleva `EnableWindowsTargeting`, así que también compila en Linux o macOS
 para comprobar el código (la DLL solo sirve en Windows con Revit). Las clases puras se
@@ -251,11 +297,13 @@ cd Tests && dotnet run
 | `HostAnalysis.cs` | Resultado por elemento (contorno o motivo de rechazo) y elecciones por losa (tipo, dirección). |
 | `RebarGenerator.cs` | Crea los `Rebar` con las dos redes de seguridad y la orientación automática de ganchos. |
 | `RebarOptionsWindow.cs`, `PlanPreview.cs`, `SectionPreview.cs` | Ventana y esquemas (WPF en código, sin XAML). |
-| `RevitTheme.cs` | Tema oscuro al estilo de Revit 2027 (el mismo que en columnas). |
-| `ArmarLosaCommand.cs`, `RibbonApp.cs` | Comando externo y pestaña de la cinta. |
-| `AppConfig.cs`, `PartitionName.cs` | Configuración y plantilla de Partición. |
+| `ArmarLosaCommand.cs` | Comando externo: selección, análisis, ventana, parámetros compartidos del contrato, borrar / conservar / migrar la armadura previa, transacción e informe. |
+| `RibbonApp.cs` | Botón **Losas** (icono propio) en la cinta común `ArbaRibbon`. |
+| `AppConfig.cs` | Configuración (`config.json`) y plantilla de Partición por defecto del contrato. |
+| `external/ARBA-comun/` | Submódulo con el código común ARBA: contrato (`ArbaContract`), partición (`ArbaPartition`, `PartitionName`), parámetros compartidos (`ArbaSharedParams`), origen (`ArbaOrigin`), migración (`ArbaMigration`), cinta (`ArbaRibbon`), tema oscuro (`RevitTheme`) y regla de nombres (`NameMatch`). No se edita desde este repo. |
 | `Tests/` | Pruebas de consola de las clases puras. |
 | `PLAN.md` | Plan de trabajo y estado del proyecto. |
 
-Las clases puras (`Geometry2D`, `SlabPlan`, `AppConfig`, `PartitionName`) no dependen de
-Revit y se prueban en el programa de consola.
+Las clases puras (`Geometry2D`, `SlabPlan`, `AppConfig` y, del común, `ArbaContract`,
+`ArbaPartition`, `PartitionName`, `NameMatch`) no dependen de Revit y se prueban en el programa
+de consola.

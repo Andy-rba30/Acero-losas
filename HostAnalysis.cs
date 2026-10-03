@@ -1,4 +1,5 @@
 using System;
+using Arba.Comun;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Structure;
 
@@ -51,12 +52,16 @@ namespace SlabRebar
 
         public string Detail(AppConfig cfg) => Error ?? Outline.Describe();
 
+        /// <summary>
+        /// Particion del contrato ARBA para un conjunto de esta losa: la categoria la deduce el comun del
+        /// anfitrion (LOSAS), el prefijo es el de este add-in (LOS) y la capa va en {codigo} / {capa}
+        /// (con la plantilla por defecto no aparece: queda en "ARBA - Codigo").
+        /// </summary>
         public string Partition(AppConfig cfg, string setName, string layer)
         {
-            return PartitionName.Expand(cfg.PartitionTemplate, new PartitionName.Source
+            return ArbaPartition.BuildFor(Host, ArbaContract.Losas, cfg.PartitionTemplate, new PartitionName.Source
             {
-                Mark = Mark, Id = Host.Id.ToString(), TypeName = TypeName, FamilyName = FamilyName,
-                SetName = setName, Layer = layer
+                Mark = Mark, TypeName = TypeName, FamilyName = FamilyName, SetName = setName, Code = layer
             });
         }
 
